@@ -10,8 +10,8 @@ JEI's grammar (`"phrases"`, `-exclusions`, `|`, `@mod`, `#tag`), R/U over any
 stack opens its recipes or uses with a tab per station, a recipe slot opens
 that stack's page, Back walks the history, "+" places a recipe the book holds,
 clicks give items in creative when the setting is on, and the UI speaks
-English or Spanish. See [`../tasks/plan.md`](../tasks/plan.md),
-[`../tasks/todo.md`](../tasks/todo.md) and [`docs/jei-parity.md`](docs/jei-parity.md).
+English or Spanish. See [`docs/jei-parity.md`](docs/jei-parity.md) for the
+feature-by-feature state against JEI.
 
 Not there yet: bookmarks, click-on-slot (only R/U), tooltips, the creative
 inventory panel, the non-recipe categories (anvil, grindstone, compost, fuel),
@@ -19,10 +19,10 @@ and shift on "+". Those need new Horizon hooks; the plan explains which.
 
 ## Install
 
-Once it is in the registry: Mods → JEI → Install, then Settings → Game →
-Native mods (experimental) → Build, and play the **Native mods** instance.
+From the registry: Mods → JEI → Install, then Settings → Game → Native mods
+(experimental) → Build, and play the **Native mods** instance.
 
-Until then, from this folder:
+From a clone of this folder:
 
 ```sh
 horizon-launcher native-build /path/to/horizon-jei/mixins/jei --trust-native-code
@@ -30,6 +30,16 @@ horizon-launcher native-build /path/to/horizon-jei/mixins/jei --trust-native-cod
 
 The first build downloads Rust and takes 20-30 minutes; later builds recompile
 only the game. Native mods are not sandboxed: build only code you trust.
+
+## Releases
+
+A release is a `.hnmod` built from a commit of this repository with
+`native/tools/native.py package`, checked with `cargo horizon-mod check`, and
+signed with minisign. The public key is [`horizon-jei.pub`](horizon-jei.pub)
+(key id `FC3386F1F51ECF6A`); the private key is not in the repository, and
+every later version is signed with it, so nobody else can publish an update
+under this project's name. The signature of each release goes into the
+registry entry, not into this repository.
 
 ## Develop
 

@@ -8,56 +8,52 @@ done.
 | Step | State |
 |---|---|
 | Version in `horizon-mixin.toml` | `0.1.0` |
-| Version in `compatibility.json` | n/a (it names the game and the commits) |
-| Package | `jei-0.1.0.hnmod`, 15,835 bytes, SHA-256 `c5590e0d…466b5b` |
-| `cargo horizon-mod check` | passes: `native-mod, format native-1/1da354b/0d6b103, for 26.3` |
-| Built and tested on the newest Nightly | `native.py check` on `1da354b` (run it again with `--horizon latest` before submitting) |
+| Package | `jei-0.1.0.hnmod`, 15,835 bytes, SHA-256 `c5590e0d4618d435fc0c56abcc9cdabf253be694710068a3dd4643ac25466b5b` |
+| Reproducible | `native.py package` on the committed tree gives those exact bytes |
+| `cargo horizon-mod check` | passes: `native-mod, format native-1/1da354b/0d6b103, for 26.3`, signature verified |
+| Checked against the Nightly players have | `native.py check --horizon latest` on `1da354b` |
 | Licence | MIT (`LICENSE`, `NOTICE` with JEI's copyright) |
-
-## Before submitting
-
-1. **Public source repository.** The registry requires a public repo under a licence it can read
-   (MIT, Apache-2.0, GPL...). This folder has a git history; push it to GitHub/GitLab and put the URL
-   in the submission form.
-2. **Run the checks again, against the Nightly players have:**
-
-   ```sh
-   python3 /home/ender/horizon-tools/horizon-mods/native/tools/native.py check "$PWD" --horizon latest
-   python3 /home/ender/horizon-tools/horizon-mods/native/tools/native.py package "$PWD"
-   cargo horizon-mod check /home/ender/horizon-tools/horizon-mods/native/target/jei-0.1.0.hnmod
-   ```
-
-   If `--horizon latest` moved, update `compatibility.json` and `horizon-mixin.toml` to the new
-   commit (they must match), rebuild, and re-run `cargo test` and `proof.py`.
-3. **Sign it (recommended).** Without a key, anyone with access to the account could publish an
-   update; with one, every later version must be signed:
-
-   ```sh
-   minisign -G -p horizon-jei.pub -s horizon-jei.key          # once; keep the .key private
-   minisign -S -s horizon-jei.key -m .../jei-0.1.0.hnmod
-   cargo horizon-mod check .../jei-0.1.0.hnmod \
-     --key "RW…" --signature .../jei-0.1.0.hnmod.minisig
-   ```
+| Signing key | minisign, id `FC3386F1F51ECF6A`; the public half is `horizon-jei.pub`, the private half lives outside the repository (`~/.config/horizon-jei/`) and is password protected |
+| Signature | `jei-0.1.0.hnmod.minisig` (next to the package in `dist/`, and its text goes in the form) |
 
 ## Submit
 
-Open <https://playhorizon.dev/mods/submit>, sign in with GitHub, and fill in:
+Open <https://playhorizon.dev/mods/submit>, sign in with GitHub, and fill in exactly this:
 
 | Field | Value |
 |---|---|
-| Kind | native mod |
-| File | `jei-0.1.0.hnmod` (+ `.minisig` if signed) |
-| id / version / game | `jei` / `0.1.0` / `26.3` |
-| Name | JEI |
-| Summary | An item and recipe viewer for Horizon: every item beside container screens, with search, recipes and uses |
-| Description | What 0.1.0 does and does not do (see `CHANGELOG.md`); say that it is unofficial, that it needs hook points version 2, and that it is not sandboxed |
-| Authors | you |
-| Licence | MIT |
-| Source | the public repo URL |
-| Icon | optional, square PNG ≤ 256 KiB |
+| Kind | Native mod |
+| File | `dist/jei-0.1.0.hnmod` |
+| Id | `jei` |
+| Version | `0.1.0` |
+| For Minecraft | `26.3` |
+| What changed | the 0.1.0 section of [`docs/submission-0.1.0.md`](submission-0.1.0.md) |
+| Name | `JEI for Horizon` |
+| Summary | `An item and recipe viewer for Horizon: every item beside container screens, with search, recipes and uses` |
+| Description | the description of [`docs/submission-0.1.0.md`](submission-0.1.0.md) |
+| Authors | `enderliker` |
+| Licence | `MIT` |
+| Source code | `https://github.com/enderliker/horizon-jei` |
+| Icon | none yet (optional; a square `https://` PNG, at most 256 KiB) |
+| Public key | `RWRqzx718YYz/OHRM+pAnFWlDv8Rrgar5C4NszQg3EKJWQZWNel5Sslf` |
+| Signature | the text of `dist/jei-0.1.0.hnmod.minisig` |
 
 "Submit for review" opens a pull request in `horizon-rust/horizon-mods`; a maintainer reads every line
 of the bundle (native mods are compiled into the player's game) and answers there.
+
+## Re-checking before you press submit
+
+```sh
+python3 /home/ender/horizon-tools/horizon-mods/native/tools/native.py check "$PWD" --horizon latest
+python3 /home/ender/horizon-tools/horizon-mods/native/tools/native.py package "$PWD"
+cp /home/ender/horizon-tools/horizon-mods/native/target/jei-0.1.0.hnmod dist/
+cargo horizon-mod check dist/jei-0.1.0.hnmod \
+  --key "$(sed -n 2p horizon-jei.pub)" --signature dist/jei-0.1.0.hnmod.minisig
+```
+
+If `--horizon latest` moved, update `compatibility.json` and `horizon-mixin.toml` to the new commit
+(they must match), rebuild, re-run `cargo test` and `proof.py`, then sign again: the signature covers
+the exact bytes.
 
 ## What the reviewer will ask
 
@@ -72,6 +68,7 @@ of the bundle (native mods are compiled into the player's game) and answers ther
 
 ## Updates
 
-A new version means a new `.hnmod` and a new submission; every version of a native mod is read again.
-After a Nightly, run `native.py check --horizon latest` and re-pin as above (the CI job in
-`.github/workflows/nightly.yml` does it daily and opens an issue when it breaks).
+A new version means a new `.hnmod`, a new signature with the same key and a new submission; every
+version of a native mod is read again. After a Nightly, run `native.py check --horizon latest` and
+re-pin as above (the CI job in `.github/workflows/nightly.yml` does it daily and opens an issue when
+it breaks). The key cannot change through the form: a different public key is a pull request by hand.
