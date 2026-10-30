@@ -11,7 +11,7 @@ done.
 | Package | `jei-0.1.0.hnmod`, 15,835 bytes, SHA-256 `c5590e0d4618d435fc0c56abcc9cdabf253be694710068a3dd4643ac25466b5b` |
 | Reproducible | `native.py package` on the committed tree gives those exact bytes |
 | `cargo horizon-mod check` | passes: `native-mod, format native-1/1da354b/0d6b103, for 26.3`, signature verified |
-| Checked against the Nightly players have | `native.py check --horizon latest` on `1da354b` |
+| Checked against the Nightly players have | `native.py check --horizon latest` passes on `fbd7288`; the bundle pins `1da354b`, the revision `proof.py` and the game run were made on |
 | Licence | MIT (`LICENSE`, `NOTICE` with JEI's copyright) |
 | Signing key | minisign, id `FC3386F1F51ECF6A`; the public half is `horizon-jei.pub`, the private half lives outside the repository (`~/.config/horizon-jei/`) and is password protected |
 | Signature | `jei-0.1.0.hnmod.minisig` (next to the package in `dist/`, and its text goes in the form) |
