@@ -5,23 +5,31 @@ reimplementation of Minecraft: Java Edition 26.3. It is a port of
 [JustEnoughItems](https://github.com/mezz/JustEnoughItems) (JEI), rebuilt on
 Horizon's native hook points.
 
-Status: **Phase 0 done, Phase 2 in progress.** The panel viewer lists every
-item, searches with JEI's grammar (`"phrases"`, `-exclusions`, `|`, `@mod`,
-`#tag`), R/U over any stack opens its recipes or uses with a tab per station,
-"+" places a known recipe, and clicks give items in creative when the setting
-is on. See [`../tasks/plan.md`](../tasks/plan.md),
+Status: **0.1.0 "JEI Core"**. The panel viewer lists every item, searches with
+JEI's grammar (`"phrases"`, `-exclusions`, `|`, `@mod`, `#tag`), R/U over any
+stack opens its recipes or uses with a tab per station, a recipe slot opens
+that stack's page, Back walks the history, "+" places a recipe the book holds,
+clicks give items in creative when the setting is on, and the UI speaks
+English or Spanish. See [`../tasks/plan.md`](../tasks/plan.md),
 [`../tasks/todo.md`](../tasks/todo.md) and [`docs/jei-parity.md`](docs/jei-parity.md).
 
 Not there yet: bookmarks, click-on-slot (only R/U), tooltips, the creative
-inventory panel, and the non-recipe categories (anvil, grindstone, compost,
-fuel). Those need new Horizon hooks; the plan explains which.
+inventory panel, the non-recipe categories (anvil, grindstone, compost, fuel),
+and shift on "+". Those need new Horizon hooks; the plan explains which.
 
-## Install (once published)
+## Install
 
-1. In the Horizon launcher: Mods → JEI → Install.
-2. Settings → Game → Native mods (experimental) → Build. The launcher compiles
-   the game with the mod; the first build downloads Rust and takes 20-30 minutes.
-3. Play the **Native mods** instance.
+Once it is in the registry: Mods → JEI → Install, then Settings → Game →
+Native mods (experimental) → Build, and play the **Native mods** instance.
+
+Until then, from this folder:
+
+```sh
+horizon-launcher native-build /path/to/horizon-jei/mixins/jei --trust-native-code
+```
+
+The first build downloads Rust and takes 20-30 minutes; later builds recompile
+only the game. Native mods are not sandboxed: build only code you trust.
 
 ## Develop
 

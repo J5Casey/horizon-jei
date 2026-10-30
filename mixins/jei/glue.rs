@@ -33,7 +33,8 @@ pub(super) fn sync(game: &mut crate::game::Game<'_>) {
     let Some(catalog) = game.native_recipes() else {
         return;
     };
-    let (viewer, out) = Viewer::new(items(&catalog), recipes(&catalog));
+    let lang = jei::lang(game.native_setting(jei::ID, "language").as_deref());
+    let (viewer, out) = Viewer::new(items(&catalog), recipes(&catalog), lang);
     STATE.with(|s| s.borrow_mut().viewer = Some(viewer));
     if let Err(error) = apply(game, out) {
         game.native_chat(&format!("JEI: {error}"));
@@ -52,6 +53,7 @@ pub(super) fn event(game: &mut crate::game::Game<'_>, event: &NativePanelEvent) 
     let recipe_key = game.native_mod_key(jei::ID, "recipe", "key.keyboard.r");
     let uses_key = game.native_mod_key(jei::ID, "uses", "key.keyboard.u");
     let give = jei::give(game.native_setting(jei::ID, "give").as_deref());
+    let lang = jei::lang(game.native_setting(jei::ID, "language").as_deref());
     let ctx = Context {
         recipe_key: &recipe_key,
         uses_key: &uses_key,
@@ -62,7 +64,7 @@ pub(super) fn event(game: &mut crate::game::Game<'_>, event: &NativePanelEvent) 
     };
 
     let mut fallback = false;
-    for out in handle(&event, &ctx) {
+    for out in handle(&event, &ctx, lang) {
         if let Out::Give { item, count } = out {
             if game.native_give(&item, count).is_err() {
                 fallback = true;
@@ -80,7 +82,7 @@ pub(super) fn event(game: &mut crate::game::Game<'_>, event: &NativePanelEvent) 
             creative: false,
             ..ctx
         };
-        for out in handle(&event, &ctx) {
+        for out in handle(&event, &ctx, lang) {
             if let Err(error) = apply(game, out) {
                 game.native_chat(&format!("JEI: {error}"));
             }
@@ -88,14 +90,14 @@ pub(super) fn event(game: &mut crate::game::Game<'_>, event: &NativePanelEvent) 
     }
 }
 
-fn handle(event: &Event, ctx: &Context<'_>) -> Vec<Out> {
+fn handle(event: &Event, ctx: &Context<'_>, lang: jei::Lang) -> Vec<Out> {
     STATE.with(|s| {
         let mut state = s.borrow_mut();
-        state
-            .viewer
-            .as_mut()
-            .map(|viewer| viewer.handle(event.clone(), ctx))
-            .unwrap_or_default()
+        let Some(viewer) = state.viewer.as_mut() else {
+            return Vec::new();
+        };
+        viewer.set_lang(lang);
+        viewer.handle(event.clone(), ctx)
     })
 }
 

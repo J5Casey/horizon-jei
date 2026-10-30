@@ -21,7 +21,8 @@ Result: `{"proof": "jei", "ok": true, "filtered": 63}`.
 | Station tabs, the `+` action button and Back work | proof steps 4-8 |
 | `+` places a recipe the book holds | after `/recipe give @s *` and giving the input, the crafting grid received the Block of Diamond |
 | A recipe slot opens that stack's recipes, and Back walks the history | proof step 6 |
-| The mod row, its page and settings persistence work (`native_setting`/`native_set_setting`) | proof step 1, file `horizon-mods/.horizon-mod-data/jei/give` |
+| The mod row, its page and settings persistence work (`native_setting`/`native_set_setting`) | proof step 1, files `horizon-mods/.horizon-mod-data/jei/{give,language}` |
+| The settings page switches the UI language (en/es) | proof step 1 |
 
 ## Surprises and decisions
 

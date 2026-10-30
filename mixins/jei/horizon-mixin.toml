@@ -1,6 +1,6 @@
 [mod]
 id = "jei"
-version = "0.0.1"
+version = "0.1.0"
 priority = 100
 
 # The commit this bundle was tested on. It hooks only the native hook points,

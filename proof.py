@@ -54,10 +54,11 @@ def run(ctl, resources, out):
         # 1. The row and its settings page: "Click gives items" off by default,
         #    and the switch persists.
         g.run("options", "mods")
-        assert "JEI 0.0.1: ON" in g.labels(), g.labels()
+        assert "JEI 0.1.0: ON" in g.labels(), g.labels()
         g.run("click", g.ids()["Settings"])
         page = g.labels()
         assert "Click gives items: OFF" in page, page
+        assert "Language: English" in page, page
         g.run("click", g.ids()["Click gives items: OFF"])
         time.sleep(0.3)
         stored = (g.home / DATA / "give").read_text()
@@ -65,6 +66,14 @@ def run(ctl, resources, out):
         g.run("click", g.ids()["Click gives items: ON"])
         time.sleep(0.3)
         assert (g.home / DATA / "give").read_text() == "false"
+        # The language setting: Spanish labels, and back.
+        g.run("click", g.ids()["Language: English"])
+        time.sleep(0.3)
+        assert (g.home / DATA / "language").read_text() == "es"
+        assert "Clic da objetos: OFF" in g.labels(), g.labels()
+        g.run("click", g.ids()["Language: Español"])
+        time.sleep(0.3)
+        assert (g.home / DATA / "language").read_text() == "en"
 
         # 2. The item list beside a crafting table.
         g.play()

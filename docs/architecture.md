@@ -87,10 +87,16 @@ category means adding a `Kind` (from a game hook) and its mapping.
 ## Tests
 
 1. `cargo test`: tokenizer (14 cases from JEI's `SearchTokenizerTest`), search prefixes, the viewer
-   (list, search, tabs, uses, history, give, transfer, empty).
+   (list, search, tabs, uses, history, give, transfer, empty), and the en/es strings.
 2. `native.py check`: the whole game compiles with the bundle, warnings are errors.
 3. `proof.py`: an offscreen game driven with `horizon-ctl`; see `docs/spike.md`.
 4. Manual: F1/F3, a LAN server, quitting and re-entering a world.
+
+## Language
+
+The game does not expose its language to mods. `Lang` (en/es) lives in the `language` setting and is
+switched on the mod's page; the item names still come from the game in the player's language. Adding
+a language means a variant in `Lang` and its strings; the rest of the UI reads them from there.
 
 ## Adding a new behaviour
 

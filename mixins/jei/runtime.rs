@@ -9,7 +9,7 @@
 /// The mod's id: its row, its settings folder and its keys.
 pub const ID: &str = "jei";
 pub const NAME: &str = "JEI";
-pub const VERSION: &str = "0.0.1";
+pub const VERSION: &str = "0.1.0";
 pub const DESCRIPTION: &str = "An item and recipe viewer: every item beside container screens, with search, recipes and uses.";
 
 /// Its keys: name, label and default (the Java mod's R and U).
@@ -18,7 +18,7 @@ pub const KEYS: [[&str; 3]; 2] = [
     ["uses", "Show uses", "key.keyboard.u"],
 ];
 
-/// `JEI 0.0.1`, as Options > Mods lists it.
+/// `JEI 0.1.0`, as Options > Mods lists it.
 pub fn title() -> String {
     format!("{NAME} {VERSION}")
 }
@@ -33,14 +33,99 @@ pub fn about_counts(items: usize, recipes: usize) -> String {
     format!("{}: {items} items, {recipes} recipes", about())
 }
 
+/// The UI's language: the game's language is not exposed to mods, so the
+/// player picks one here (default English).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lang {
+    En,
+    Es,
+}
+
+pub fn lang(saved: Option<&str>) -> Lang {
+    if saved == Some("es") {
+        Lang::Es
+    } else {
+        Lang::En
+    }
+}
+
+impl Lang {
+    pub fn next(self) -> Lang {
+        match self {
+            Lang::En => Lang::Es,
+            Lang::Es => Lang::En,
+        }
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::En => "en",
+            Lang::Es => "es",
+        }
+    }
+
+    pub fn language_button(self) -> String {
+        format!(
+            "Language: {}",
+            match self {
+                Lang::En => "English",
+                Lang::Es => "Español",
+            }
+        )
+    }
+
+    pub fn give_button(self, on: bool) -> String {
+        let state = if on { "ON" } else { "OFF" };
+        match self {
+            Lang::En => format!("Click gives items: {state}"),
+            Lang::Es => format!("Clic da objetos: {state}"),
+        }
+    }
+
+    fn recipes(self) -> &'static str {
+        match self {
+            Lang::En => "Recipes",
+            Lang::Es => "Recetas",
+        }
+    }
+
+    fn uses(self) -> &'static str {
+        match self {
+            Lang::En => "Uses",
+            Lang::Es => "Usos",
+        }
+    }
+
+    fn shapeless(self) -> &'static str {
+        match self {
+            Lang::En => "Shapeless",
+            Lang::Es => "Sin forma",
+        }
+    }
+
+    fn no_recipes(self) -> &'static str {
+        match self {
+            Lang::En => "No recipes for",
+            Lang::Es => "Sin recetas para",
+        }
+    }
+
+    fn no_uses(self) -> &'static str {
+        match self {
+            Lang::En => "No uses for",
+            Lang::Es => "Sin usos para",
+        }
+    }
+}
+
 /// Whether "Click gives items" is on: `true` only when the player turned it on.
 pub fn give(saved: Option<&str>) -> bool {
     saved == Some("true")
 }
 
-/// The settings page's button for "Click gives items".
+/// The settings page's button for "Click gives items", in English.
 pub fn give_button(on: bool) -> String {
-    format!("Click gives items: {}", if on { "ON" } else { "OFF" })
+    Lang::En.give_button(on)
 }
 
 /// `/jei` and `/jei give`, without the slash. `None` for another command.
@@ -473,6 +558,7 @@ struct Page {
 pub struct Viewer {
     items: Vec<Item>,
     recipes: Vec<Recipe>,
+    lang: Lang,
     /// The panel's items now: indexes into `items`, after the search.
     listed: Vec<usize>,
     search: String,
@@ -484,10 +570,11 @@ pub struct Viewer {
 
 impl Viewer {
     /// A viewer with the world's tables; the output lists every item.
-    pub fn new(items: Vec<Item>, recipes: Vec<Recipe>) -> (Self, Out) {
+    pub fn new(items: Vec<Item>, recipes: Vec<Recipe>, lang: Lang) -> (Self, Out) {
         let mut me = Self {
             items,
             recipes,
+            lang,
             listed: Vec::new(),
             search: String::new(),
             history: Vec::new(),
@@ -495,6 +582,11 @@ impl Viewer {
         };
         let out = me.list();
         (me, out)
+    }
+
+    /// The player changed the language: rewrite the strings of the next page.
+    pub fn set_lang(&mut self, lang: Lang) {
+        self.lang = lang;
     }
 
     pub fn item_count(&self) -> usize {
@@ -576,9 +668,9 @@ impl Viewer {
             return vec![Out::Say(format!(
                 "{}: {name}",
                 if uses {
-                    "No uses for"
+                    self.lang.no_uses()
                 } else {
-                    "No recipes for"
+                    self.lang.no_recipes()
                 }
             ))];
         }
@@ -625,7 +717,11 @@ impl Viewer {
             .collect();
         let mut title = format!(
             "{}: {}",
-            if page.uses { "Uses" } else { "Recipes" },
+            if page.uses {
+                self.lang.uses()
+            } else {
+                self.lang.recipes()
+            },
             self.name(&page.item.item)
         );
         if total > views.len() {
@@ -670,7 +766,7 @@ impl Viewer {
                     Layout::Grid,
                     width,
                     n.div_ceil(width).max(1),
-                    "Shapeless".into(),
+                    self.lang.shapeless().into(),
                 )
             }
             Kind::Smelting | Kind::Blasting | Kind::Smoking | Kind::Campfire => {
@@ -755,7 +851,7 @@ impl Viewer {
 mod tests {
     #[test]
     fn title_has_name_and_version() {
-        assert_eq!(super::title(), "JEI 0.0.1");
+        assert_eq!(super::title(), "JEI 0.1.0");
     }
 
     #[test]
@@ -1118,7 +1214,7 @@ mod tests {
     #[test]
     fn viewer_lists_items_and_filters() {
         let (items, recipes) = tables();
-        let (mut viewer, out) = super::Viewer::new(items, recipes);
+        let (mut viewer, out) = super::Viewer::new(items, recipes, super::Lang::En);
         assert!(matches!(&out, super::Out::Items(list) if list.len() == 6));
         let out = viewer.handle(super::Event::Search("diamond".into()), &context(&[]));
         assert!(matches!(&out[0], super::Out::Items(list) if list.len() == 3));
@@ -1129,7 +1225,7 @@ mod tests {
     #[test]
     fn viewer_opens_recipes_on_station_tabs() {
         let (items, recipes) = tables();
-        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let (mut viewer, _) = super::Viewer::new(items, recipes, super::Lang::En);
         let out = viewer.handle(
             super::Event::Key {
                 key: "key.keyboard.r".into(),
@@ -1168,7 +1264,7 @@ mod tests {
     #[test]
     fn viewer_uses_find_every_input() {
         let (items, recipes) = tables();
-        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let (mut viewer, _) = super::Viewer::new(items, recipes, super::Lang::En);
         let out = viewer.handle(
             super::Event::Key {
                 key: "key.keyboard.u".into(),
@@ -1187,7 +1283,7 @@ mod tests {
     #[test]
     fn viewer_back_walks_the_history() {
         let (items, recipes) = tables();
-        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let (mut viewer, _) = super::Viewer::new(items, recipes, super::Lang::En);
         viewer.handle(
             super::Event::Key {
                 key: "key.keyboard.r".into(),
@@ -1213,7 +1309,7 @@ mod tests {
     #[test]
     fn viewer_gives_only_in_creative() {
         let (items, recipes) = tables();
-        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let (mut viewer, _) = super::Viewer::new(items, recipes, super::Lang::En);
         let mut ctx = context(&[]);
         ctx.give = true;
         // Not creative: the click opens the item's recipes instead.
@@ -1247,7 +1343,7 @@ mod tests {
     #[test]
     fn viewer_places_a_known_book_recipe() {
         let (items, recipes) = tables();
-        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let (mut viewer, _) = super::Viewer::new(items, recipes, super::Lang::En);
         viewer.handle(
             super::Event::Key {
                 key: "key.keyboard.r".into(),
@@ -1277,9 +1373,46 @@ mod tests {
     }
 
     #[test]
+    fn language_follows_the_setting() {
+        assert_eq!(super::lang(None), super::Lang::En);
+        assert_eq!(super::lang(Some("es")), super::Lang::Es);
+        assert_eq!(super::lang(Some("fr")), super::Lang::En);
+        assert_eq!(super::Lang::En.language_button(), "Language: English");
+        assert_eq!(super::Lang::Es.language_button(), "Language: Español");
+        assert_eq!(super::Lang::En.give_button(true), "Click gives items: ON");
+        assert_eq!(super::Lang::Es.give_button(false), "Clic da objetos: OFF");
+    }
+
+    #[test]
+    fn viewer_speaks_spanish() {
+        let (items, recipes) = tables();
+        let (mut viewer, _) = super::Viewer::new(items, recipes, super::Lang::Es);
+        let out = viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.r".into(),
+                stack: stack("minecraft:diamond"),
+            },
+            &context(&[]),
+        );
+        let super::Out::Recipes { title, views, .. } = &out[0] else {
+            panic!("not a page: {out:?}");
+        };
+        assert_eq!(title, "Recetas: Diamond");
+        assert_eq!(views[0].note, "Sin forma");
+        let out = viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.r".into(),
+                stack: stack("minecraft:stone"),
+            },
+            &context(&[]),
+        );
+        assert_eq!(out, vec![super::Out::Say("Sin recetas para: Stone".into())]);
+    }
+
+    #[test]
     fn viewer_says_when_there_is_nothing() {
         let (items, recipes) = tables();
-        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let (mut viewer, _) = super::Viewer::new(items, recipes, super::Lang::En);
         let out = viewer.handle(
             super::Event::Key {
                 key: "key.keyboard.r".into(),
