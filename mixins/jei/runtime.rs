@@ -28,21 +28,26 @@ pub fn about() -> String {
     format!("{NAME} {VERSION} (alpha) on hook points version 2")
 }
 
-/// Whether the debug setting is on: `true` unless the player turned it off.
-pub fn debug(saved: Option<&str>) -> bool {
-    saved != Some("false")
+/// The line `/jei` says in a world: what the viewer holds.
+pub fn about_counts(items: usize, recipes: usize) -> String {
+    format!("{}: {items} items, {recipes} recipes", about())
 }
 
-/// The settings page's one button.
-pub fn debug_button(on: bool) -> String {
-    format!("Debug: {}", if on { "ON" } else { "OFF" })
+/// Whether "Click gives items" is on: `true` only when the player turned it on.
+pub fn give(saved: Option<&str>) -> bool {
+    saved == Some("true")
 }
 
-/// `/jei` and `/jei debug`, without the slash. `None` for another command.
+/// The settings page's button for "Click gives items".
+pub fn give_button(on: bool) -> String {
+    format!("Click gives items: {}", if on { "ON" } else { "OFF" })
+}
+
+/// `/jei` and `/jei give`, without the slash. `None` for another command.
 pub fn command(args: &str) -> Option<Command> {
     match args.trim() {
         "" | "about" => Some(Command::About),
-        "debug" => Some(Command::ToggleDebug),
+        "give" => Some(Command::ToggleGive),
         _ => None,
     }
 }
@@ -50,7 +55,7 @@ pub fn command(args: &str) -> Option<Command> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
     About,
-    ToggleDebug,
+    ToggleGive,
 }
 
 /// One word of a search, as JEI's `SearchTokenizer` builds it (MIT, © mezz:
@@ -245,6 +250,507 @@ fn token_matches(item: &SearchItem<'_>, token: &Token) -> bool {
     hit != token.exclusion
 }
 
+/// Items the panel takes, and the most recipes a page shows.
+pub const ITEMS_MAX: usize = 8192;
+pub const RECIPES_MAX: usize = 256;
+/// Stacks a slot cycles through.
+pub const STACKS_MAX: usize = 64;
+
+/// One item of the game, as the viewer lists it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Item {
+    pub id: String,
+    pub name: String,
+    pub tags: Vec<String>,
+}
+
+impl Item {
+    fn search(&self) -> SearchItem<'_> {
+        SearchItem {
+            name: &self.name,
+            id: &self.id,
+            tags: &self.tags,
+        }
+    }
+}
+
+/// A stack the panel shows: an item id, a count and components in vanilla's
+/// item syntax, or "".
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Stack {
+    pub item: String,
+    pub count: u32,
+    pub components: String,
+}
+
+impl Stack {
+    pub fn item(id: &str) -> Self {
+        Self {
+            item: id.to_owned(),
+            count: 1,
+            components: String::new(),
+        }
+    }
+}
+
+/// One alternative of a recipe slot: an index into the viewer's items.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ingredient {
+    pub item: u32,
+    pub count: u32,
+    pub components: String,
+}
+
+/// The vanilla recipe kinds the game gives a viewer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    CraftingShaped,
+    CraftingShapeless,
+    Smelting,
+    Blasting,
+    Smoking,
+    Campfire,
+    Stonecutting,
+    Smithing,
+    Brewing,
+}
+
+/// The station a kind is made at, in the order of the tabs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Station {
+    Crafting,
+    Furnace,
+    BlastFurnace,
+    Smoker,
+    Campfire,
+    Stonecutter,
+    Smithing,
+    Brewing,
+}
+
+impl Station {
+    pub const ALL: [Station; 8] = [
+        Station::Crafting,
+        Station::Furnace,
+        Station::BlastFurnace,
+        Station::Smoker,
+        Station::Campfire,
+        Station::Stonecutter,
+        Station::Smithing,
+        Station::Brewing,
+    ];
+
+    /// The item whose icon stands for the station in the tabs.
+    pub fn icon(self) -> &'static str {
+        match self {
+            Station::Crafting => "minecraft:crafting_table",
+            Station::Furnace => "minecraft:furnace",
+            Station::BlastFurnace => "minecraft:blast_furnace",
+            Station::Smoker => "minecraft:smoker",
+            Station::Campfire => "minecraft:campfire",
+            Station::Stonecutter => "minecraft:stonecutter",
+            Station::Smithing => "minecraft:smithing_table",
+            Station::Brewing => "minecraft:brewing_stand",
+        }
+    }
+
+    fn order(self) -> usize {
+        Station::ALL
+            .iter()
+            .position(|s| *s == self)
+            .unwrap_or(Station::ALL.len())
+    }
+}
+
+impl Kind {
+    pub fn station(self) -> Station {
+        match self {
+            Kind::CraftingShaped | Kind::CraftingShapeless => Station::Crafting,
+            Kind::Smelting => Station::Furnace,
+            Kind::Blasting => Station::BlastFurnace,
+            Kind::Smoking => Station::Smoker,
+            Kind::Campfire => Station::Campfire,
+            Kind::Stonecutting => Station::Stonecutter,
+            Kind::Smithing => Station::Smithing,
+            Kind::Brewing => Station::Brewing,
+        }
+    }
+}
+
+/// A recipe as the viewer knows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Recipe {
+    pub kind: Kind,
+    /// The grid's size for a shaped recipe; 0 for the other kinds.
+    pub width: u32,
+    pub height: u32,
+    /// Each slot's alternatives; the input(s) for the non-grid kinds.
+    pub slots: Vec<Vec<Ingredient>>,
+    pub results: Vec<Ingredient>,
+    /// Game ticks and experience, for cooking; 0 otherwise.
+    pub cooking_time: u32,
+    pub experience: f32,
+    /// The recipe book's id, or -1.
+    pub book_id: i32,
+}
+
+/// How the panel lays a recipe out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Layout {
+    Grid,
+    Cooking,
+    Single,
+    Smithing,
+    Brewing,
+}
+
+/// A recipe as the panel draws it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct View {
+    pub layout: Layout,
+    pub width: u32,
+    pub height: u32,
+    pub slots: Vec<Vec<Stack>>,
+    pub results: Vec<Stack>,
+    pub note: String,
+    /// The action button: none, or whether it is enabled.
+    pub action: Option<bool>,
+}
+
+/// What the player did, in the viewer's words.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Event {
+    Search(String),
+    Clicked { index: usize, right: bool },
+    Key { key: String, stack: Stack },
+    Tab(usize),
+    Back,
+    SlotClicked { stack: Stack, right: bool },
+    Action(usize),
+}
+
+/// What the game is to do.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Out {
+    /// Show these items in the panel; empty clears it.
+    Items(Vec<Stack>),
+    /// Show this recipe page; no views goes back to the items.
+    Recipes {
+        title: String,
+        tabs: Vec<Stack>,
+        tab: u32,
+        views: Vec<View>,
+    },
+    /// Creative: give the player this item.
+    Give { item: String, count: u32 },
+    /// Place this recipe-book id in the open grid.
+    Place { book_id: i32, all: bool },
+    /// A line only this player sees.
+    Say(String),
+}
+
+/// The player's settings and the book's state, for one event.
+pub struct Context<'a> {
+    pub recipe_key: &'a str,
+    pub uses_key: &'a str,
+    /// "Click gives items" is on.
+    pub give: bool,
+    /// The game would give items (creative).
+    pub creative: bool,
+    /// The recipe book's ids now.
+    pub known: &'a [i32],
+}
+
+/// One page of the history: an item's recipes or uses, on one station's tab.
+#[derive(Clone, Debug, PartialEq)]
+struct Page {
+    item: Stack,
+    uses: bool,
+    tab: usize,
+}
+
+/// The viewer: the list, the search and the history of recipe pages.
+pub struct Viewer {
+    items: Vec<Item>,
+    recipes: Vec<Recipe>,
+    /// The panel's items now: indexes into `items`, after the search.
+    listed: Vec<usize>,
+    search: String,
+    /// The page shown, then the ones Back returns to.
+    history: Vec<Page>,
+    /// The book id behind each recipe the page shows (-1: none).
+    shown: Vec<i32>,
+}
+
+impl Viewer {
+    /// A viewer with the world's tables; the output lists every item.
+    pub fn new(items: Vec<Item>, recipes: Vec<Recipe>) -> (Self, Out) {
+        let mut me = Self {
+            items,
+            recipes,
+            listed: Vec::new(),
+            search: String::new(),
+            history: Vec::new(),
+            shown: Vec::new(),
+        };
+        let out = me.list();
+        (me, out)
+    }
+
+    pub fn item_count(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn recipe_count(&self) -> usize {
+        self.recipes.len()
+    }
+
+    fn id(&self, item: u32) -> &str {
+        self.items
+            .get(item as usize)
+            .map_or("minecraft:air", |i| &i.id)
+    }
+
+    fn name(&self, item: &str) -> String {
+        self.items
+            .iter()
+            .find(|i| i.id == item)
+            .map_or_else(|| item.to_owned(), |i| i.name.clone())
+    }
+
+    fn convert(&self, ingredient: &Ingredient) -> Stack {
+        Stack {
+            item: self.id(ingredient.item).to_owned(),
+            count: ingredient.count,
+            components: ingredient.components.clone(),
+        }
+    }
+
+    /// The same item, and the same components when `want` names some.
+    fn matches(&self, ingredient: &Ingredient, want: &Stack) -> bool {
+        self.id(ingredient.item) == want.item
+            && (want.components.is_empty() || ingredient.components == want.components)
+    }
+
+    /// The items the search keeps: JEI's words, phrases, exclusions and
+    /// prefixes.
+    fn list(&mut self) -> Out {
+        self.listed = (self.items.iter().enumerate())
+            .filter(|(_, item)| item.id != "minecraft:air")
+            .filter(|(_, item)| keeps(&item.search(), &self.search))
+            .map(|(n, _)| n)
+            .take(ITEMS_MAX)
+            .collect();
+        Out::Items(
+            (self.listed.iter())
+                .map(|&n| Stack::item(&self.items[n].id))
+                .collect(),
+        )
+    }
+
+    /// The recipes the current page lists, across every station.
+    fn found(&self, page: &Page) -> Vec<&Recipe> {
+        (self.recipes.iter())
+            .filter(|r| {
+                if page.uses {
+                    r.slots
+                        .iter()
+                        .flatten()
+                        .any(|s| self.matches(s, &page.item))
+                } else {
+                    r.results.iter().any(|s| self.matches(s, &page.item))
+                }
+            })
+            .collect()
+    }
+
+    /// Opens a page, pushing it on the history; says why when it is empty.
+    fn open(&mut self, item: &Stack, uses: bool, known: &[i32]) -> Vec<Out> {
+        let item = Stack {
+            count: 1,
+            ..item.clone()
+        };
+        let page = Page { item, uses, tab: 0 };
+        if self.found(&page).is_empty() {
+            let name = self.name(&page.item.item).to_owned();
+            return vec![Out::Say(format!(
+                "{}: {name}",
+                if uses {
+                    "No uses for"
+                } else {
+                    "No recipes for"
+                }
+            ))];
+        }
+        self.history.push(page);
+        vec![self.show(known)]
+    }
+
+    /// The page on top of the history, or the items when there is none.
+    fn show(&mut self, known: &[i32]) -> Out {
+        let Some(mut page) = self.history.last().cloned() else {
+            self.shown.clear();
+            return Out::Recipes {
+                title: String::new(),
+                tabs: Vec::new(),
+                tab: 0,
+                views: Vec::new(),
+            };
+        };
+        let found = self.found(&page);
+        let mut stations: Vec<Station> = found
+            .iter()
+            .map(|r| r.kind.station())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        stations.sort_by_key(|s| s.order());
+        page.tab = page.tab.min(stations.len().saturating_sub(1));
+        let selected = stations.get(page.tab).copied();
+        let on_station: Vec<&Recipe> = found
+            .iter()
+            .copied()
+            .filter(|r| Some(r.kind.station()) == selected)
+            .collect();
+        let total = on_station.len();
+        let views: Vec<View> = on_station
+            .iter()
+            .take(RECIPES_MAX)
+            .map(|&r| self.view(r, known))
+            .collect();
+        self.shown = on_station
+            .iter()
+            .take(RECIPES_MAX)
+            .map(|r| r.book_id)
+            .collect();
+        let mut title = format!(
+            "{}: {}",
+            if page.uses { "Uses" } else { "Recipes" },
+            self.name(&page.item.item)
+        );
+        if total > views.len() {
+            title.push_str(&format!(" ({} of {total})", views.len()));
+        }
+        let tabs = (stations.iter()).map(|s| Stack::item(s.icon())).collect();
+        if let Some(top) = self.history.last_mut() {
+            top.tab = page.tab;
+        }
+        Out::Recipes {
+            title,
+            tabs,
+            tab: page.tab as u32,
+            views,
+        }
+    }
+
+    /// A recipe as the panel draws it.
+    fn view(&self, recipe: &Recipe, known: &[i32]) -> View {
+        let slots = (recipe.slots.iter())
+            .map(|slot| {
+                slot.iter()
+                    .take(STACKS_MAX)
+                    .map(|s| self.convert(s))
+                    .collect()
+            })
+            .collect();
+        let results = (recipe.results.iter())
+            .take(STACKS_MAX)
+            .map(|s| self.convert(s))
+            .collect();
+        let (layout, width, height, note) = match recipe.kind {
+            Kind::CraftingShaped => (Layout::Grid, recipe.width, recipe.height, String::new()),
+            Kind::CraftingShapeless => {
+                let n = recipe.slots.len() as u32;
+                let width = match n {
+                    0 | 1 => 1,
+                    2..=4 => 2,
+                    _ => 3,
+                };
+                (
+                    Layout::Grid,
+                    width,
+                    n.div_ceil(width).max(1),
+                    "Shapeless".into(),
+                )
+            }
+            Kind::Smelting | Kind::Blasting | Kind::Smoking | Kind::Campfire => {
+                let seconds = recipe.cooking_time as f32 / 20.0;
+                (
+                    Layout::Cooking,
+                    1,
+                    1,
+                    format!(
+                        "{seconds} s, {} XP",
+                        (recipe.experience * 100.0).round() / 100.0
+                    ),
+                )
+            }
+            Kind::Stonecutting => (Layout::Single, 1, 1, String::new()),
+            Kind::Smithing => (Layout::Smithing, 3, 1, String::new()),
+            Kind::Brewing => (Layout::Brewing, 2, 1, String::new()),
+        };
+        View {
+            layout,
+            width,
+            height,
+            slots,
+            results,
+            note,
+            action: (recipe.book_id >= 0).then(|| known.contains(&recipe.book_id)),
+        }
+    }
+
+    /// The player's event.
+    pub fn handle(&mut self, event: Event, ctx: &Context<'_>) -> Vec<Out> {
+        match event {
+            Event::Search(text) => {
+                self.search = text;
+                vec![self.list()]
+            }
+            Event::Clicked { index, right } => {
+                let Some(&n) = self.listed.get(index) else {
+                    return Vec::new();
+                };
+                let item = self.items[n].id.clone();
+                if ctx.give && ctx.creative {
+                    return vec![Out::Give {
+                        item,
+                        count: if right { 99 } else { 1 },
+                    }];
+                }
+                self.open(&Stack::item(&item), right, ctx.known)
+            }
+            Event::Key { key, stack } => {
+                if key == ctx.recipe_key {
+                    self.open(&stack, false, ctx.known)
+                } else if key == ctx.uses_key {
+                    self.open(&stack, true, ctx.known)
+                } else {
+                    Vec::new()
+                }
+            }
+            Event::Tab(tab) => {
+                if let Some(page) = self.history.last_mut() {
+                    page.tab = tab;
+                }
+                vec![self.show(ctx.known)]
+            }
+            Event::Back => {
+                self.history.pop();
+                vec![self.show(ctx.known)]
+            }
+            Event::SlotClicked { stack, right } => self.open(&stack, right, ctx.known),
+            Event::Action(i) => match self.shown.get(i) {
+                Some(&book) if book >= 0 => vec![Out::Place {
+                    book_id: book,
+                    all: false,
+                }],
+                _ => Vec::new(),
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -258,17 +764,23 @@ mod tests {
     }
 
     #[test]
-    fn debug_defaults_to_on() {
-        assert!(super::debug(None));
-        assert!(!super::debug(Some("false")));
-        assert!(super::debug(Some("true")));
+    fn about_counts_lists_the_tables() {
+        let text = super::about_counts(1658, 1234);
+        assert!(text.contains("1658 items, 1234 recipes"), "{text}");
+    }
+
+    #[test]
+    fn give_is_off_until_turned_on() {
+        assert!(!super::give(None));
+        assert!(!super::give(Some("false")));
+        assert!(super::give(Some("true")));
     }
 
     #[test]
     fn commands() {
         assert_eq!(super::command(""), Some(super::Command::About));
         assert_eq!(super::command("  about "), Some(super::Command::About));
-        assert_eq!(super::command("debug"), Some(super::Command::ToggleDebug));
+        assert_eq!(super::command("give"), Some(super::Command::ToggleGive));
         assert_eq!(super::command("config"), None);
     }
 
@@ -507,5 +1019,274 @@ mod tests {
         assert!(!super::keeps(&item, "iron|gold"));
         assert!(super::keeps(&item, "\"one stone\"|stone"));
         assert!(!super::keeps(&item, "\"one stone\""));
+    }
+
+    // The viewer: the list, station tabs, history, give and transfer.
+    fn item(id: &str, name: &str) -> super::Item {
+        super::Item {
+            id: id.to_owned(),
+            name: name.to_owned(),
+            tags: Vec::new(),
+        }
+    }
+
+    fn ingredient(item: u32) -> super::Ingredient {
+        super::Ingredient {
+            item,
+            count: 1,
+            components: String::new(),
+        }
+    }
+
+    fn stack(id: &str) -> super::Stack {
+        super::Stack::item(id)
+    }
+
+    /// Stone, Diamond, Diamond Block, Diamond Ore, Crafting Table, Furnace.
+    fn tables() -> (Vec<super::Item>, Vec<super::Recipe>) {
+        let items = vec![
+            item("minecraft:stone", "Stone"),
+            item("minecraft:diamond", "Diamond"),
+            item("minecraft:diamond_block", "Block of Diamond"),
+            item("minecraft:diamond_ore", "Diamond Ore"),
+            item("minecraft:crafting_table", "Crafting Table"),
+            item("minecraft:furnace", "Furnace"),
+        ];
+        let recipes = vec![
+            // Block of Diamond -> Diamond (shapeless), book 7.
+            super::Recipe {
+                kind: super::Kind::CraftingShapeless,
+                width: 0,
+                height: 0,
+                slots: vec![vec![ingredient(2)]],
+                results: vec![ingredient(1)],
+                cooking_time: 0,
+                experience: 0.0,
+                book_id: 7,
+            },
+            // Diamond Ore -> Diamond (smelting), book 8.
+            super::Recipe {
+                kind: super::Kind::Smelting,
+                width: 0,
+                height: 0,
+                slots: vec![vec![ingredient(3)]],
+                results: vec![ingredient(1)],
+                cooking_time: 200,
+                experience: 1.0,
+                book_id: 8,
+            },
+            // Diamond -> Block of Diamond (shaped 1x1), book 9.
+            super::Recipe {
+                kind: super::Kind::CraftingShaped,
+                width: 1,
+                height: 1,
+                slots: vec![vec![ingredient(1)]],
+                results: vec![ingredient(2)],
+                cooking_time: 0,
+                experience: 0.0,
+                book_id: 9,
+            },
+            // A smithing recipe the book doesn't show.
+            super::Recipe {
+                kind: super::Kind::Smithing,
+                width: 0,
+                height: 0,
+                slots: vec![
+                    vec![ingredient(0)],
+                    vec![ingredient(1)],
+                    vec![ingredient(2)],
+                ],
+                results: vec![ingredient(1)],
+                cooking_time: 0,
+                experience: 0.0,
+                book_id: -1,
+            },
+        ];
+        (items, recipes)
+    }
+
+    fn context(known: &[i32]) -> super::Context<'_> {
+        super::Context {
+            recipe_key: "key.keyboard.r",
+            uses_key: "key.keyboard.u",
+            give: false,
+            creative: false,
+            known,
+        }
+    }
+
+    #[test]
+    fn viewer_lists_items_and_filters() {
+        let (items, recipes) = tables();
+        let (mut viewer, out) = super::Viewer::new(items, recipes);
+        assert!(matches!(&out, super::Out::Items(list) if list.len() == 6));
+        let out = viewer.handle(super::Event::Search("diamond".into()), &context(&[]));
+        assert!(matches!(&out[0], super::Out::Items(list) if list.len() == 3));
+        let out = viewer.handle(super::Event::Search(String::new()), &context(&[]));
+        assert!(matches!(&out[0], super::Out::Items(list) if list.len() == 6));
+    }
+
+    #[test]
+    fn viewer_opens_recipes_on_station_tabs() {
+        let (items, recipes) = tables();
+        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let out = viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.r".into(),
+                stack: stack("minecraft:diamond"),
+            },
+            &context(&[7]),
+        );
+        let super::Out::Recipes {
+            title,
+            tabs,
+            tab,
+            views,
+        } = &out[0]
+        else {
+            panic!("not a page: {out:?}");
+        };
+        assert_eq!(title, "Recipes: Diamond");
+        assert_eq!(*tab, 0);
+        assert_eq!(tabs[0].item, "minecraft:crafting_table");
+        assert_eq!(tabs[1].item, "minecraft:furnace");
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].layout, super::Layout::Grid);
+        assert_eq!(views[0].note, "Shapeless");
+        // The book holds recipe 7: the "+" is enabled.
+        assert_eq!(views[0].action, Some(true));
+
+        let out = viewer.handle(super::Event::Tab(1), &context(&[7]));
+        let super::Out::Recipes { tab, views, .. } = &out[0] else {
+            panic!("not a page: {out:?}");
+        };
+        assert_eq!(*tab, 1);
+        assert_eq!(views[0].layout, super::Layout::Cooking);
+        assert_eq!(views[0].note, "10 s, 1 XP");
+    }
+
+    #[test]
+    fn viewer_uses_find_every_input() {
+        let (items, recipes) = tables();
+        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let out = viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.u".into(),
+                stack: stack("minecraft:diamond"),
+            },
+            &context(&[]),
+        );
+        let super::Out::Recipes { title, tabs, .. } = &out[0] else {
+            panic!("not a page: {out:?}");
+        };
+        assert_eq!(title, "Uses: Diamond");
+        // Crafting (diamond -> block) and smithing (diamond is its base).
+        assert_eq!(tabs.len(), 2, "one tab per station: {tabs:?}");
+    }
+
+    #[test]
+    fn viewer_back_walks_the_history() {
+        let (items, recipes) = tables();
+        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.r".into(),
+                stack: stack("minecraft:diamond"),
+            },
+            &context(&[]),
+        );
+        viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.r".into(),
+                stack: stack("minecraft:diamond_block"),
+            },
+            &context(&[]),
+        );
+        let out = viewer.handle(super::Event::Back, &context(&[]));
+        assert!(
+            matches!(&out[0], super::Out::Recipes { title, .. } if title == "Recipes: Diamond")
+        );
+        let out = viewer.handle(super::Event::Back, &context(&[]));
+        assert!(matches!(&out[0], super::Out::Recipes { views, .. } if views.is_empty()));
+    }
+
+    #[test]
+    fn viewer_gives_only_in_creative() {
+        let (items, recipes) = tables();
+        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let mut ctx = context(&[]);
+        ctx.give = true;
+        // Not creative: the click opens the item's recipes instead.
+        let out = viewer.handle(
+            super::Event::Clicked {
+                index: 1,
+                right: false,
+            },
+            &ctx,
+        );
+        assert!(matches!(&out[0], super::Out::Recipes { .. }));
+        ctx.creative = true;
+        let out = viewer.handle(
+            super::Event::Clicked {
+                index: 1,
+                right: false,
+            },
+            &ctx,
+        );
+        assert!(matches!(&out[0], super::Out::Give { count: 1, .. }));
+        let out = viewer.handle(
+            super::Event::Clicked {
+                index: 1,
+                right: true,
+            },
+            &ctx,
+        );
+        assert!(matches!(&out[0], super::Out::Give { count: 99, .. }));
+    }
+
+    #[test]
+    fn viewer_places_a_known_book_recipe() {
+        let (items, recipes) = tables();
+        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.r".into(),
+                stack: stack("minecraft:diamond"),
+            },
+            &context(&[7]),
+        );
+        let out = viewer.handle(super::Event::Action(0), &context(&[7]));
+        assert_eq!(
+            out,
+            vec![super::Out::Place {
+                book_id: 7,
+                all: false
+            }]
+        );
+        // The smithing tab's recipe has no book id: its button does nothing.
+        viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.u".into(),
+                stack: stack("minecraft:diamond"),
+            },
+            &context(&[]),
+        );
+        viewer.handle(super::Event::Tab(1), &context(&[]));
+        let out = viewer.handle(super::Event::Action(0), &context(&[]));
+        assert!(out.is_empty(), "{out:?}");
+    }
+
+    #[test]
+    fn viewer_says_when_there_is_nothing() {
+        let (items, recipes) = tables();
+        let (mut viewer, _) = super::Viewer::new(items, recipes);
+        let out = viewer.handle(
+            super::Event::Key {
+                key: "key.keyboard.r".into(),
+                stack: stack("minecraft:stone"),
+            },
+            &context(&[]),
+        );
+        assert_eq!(out, vec![super::Out::Say("No recipes for: Stone".into())]);
     }
 }

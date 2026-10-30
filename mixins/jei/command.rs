@@ -1,4 +1,4 @@
-// /jei says what this build is; /jei debug turns debug on or off.
+// /jei says what this build is; /jei give turns "Click gives items" on or off.
 fn jei_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut bool) {
     use crate::game::jei as m;
     let Some(args) = command.strip_prefix("jei") else {
@@ -9,16 +9,22 @@ fn jei_command(game: &mut crate::game::Game<'_>, command: &str, ran: &mut bool) 
     }
     let Some(cmd) = m::command(args) else {
         *ran = true;
-        game.native_chat("Unknown option: use /jei or /jei debug");
+        game.native_chat("Unknown option: use /jei or /jei give");
         return;
     };
     *ran = true;
     match cmd {
-        m::Command::About => game.native_chat(&m::about()),
-        m::Command::ToggleDebug => {
-            let on = m::debug(game.native_setting(m::ID, "debug").as_deref());
-            game.native_set_setting(m::ID, "debug", if on { "false" } else { "true" });
-            game.native_chat(&m::debug_button(!on));
+        m::Command::About => {
+            let text = match crate::game::jei_glue::counts() {
+                Some((items, recipes)) => m::about_counts(items, recipes),
+                None => m::about(),
+            };
+            game.native_chat(&text);
+        }
+        m::Command::ToggleGive => {
+            let on = m::give(game.native_setting(m::ID, "give").as_deref());
+            game.native_set_setting(m::ID, "give", if on { "false" } else { "true" });
+            game.native_chat(&m::give_button(!on));
         }
     }
 }

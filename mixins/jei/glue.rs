@@ -1,248 +1,272 @@
-// The item list and the recipe pages in the panel (Phase 0 spike, kept as the
-// base of Phase 2): every item the game knows, filtered by the search box, and
-// R/U over any stack to open its recipes or uses.
+// The edges between Horizon and the viewer (crate::game::jei): the game's
+// item and recipe tables in, the panel, give and place out.
+use crate::game::jei::{
+    self, Context, Event, Ingredient, Item, Kind, Layout, Out, Recipe, Stack, View, Viewer,
+};
 use crate::game::native_hooks::{
-    NativePanelEvent, NativeRecipe, NativeRecipeKind, NativeRecipeLayout, NativeRecipeStack,
-    NativeRecipeView, NativeRecipes, NativeStack,
+    NativePanelEvent, NativeRecipeKind, NativeRecipeLayout, NativeRecipeStack, NativeRecipeView,
+    NativeRecipes, NativeStack,
 };
 use std::cell::RefCell;
-use std::sync::Arc;
 
-/// What the mod keeps between hooks: the world's tables and the search text.
+/// The viewer while a world is open.
 struct State {
-    catalog: Option<Arc<NativeRecipes>>,
-    search: String,
+    viewer: Option<Viewer>,
 }
 
 thread_local! {
-    static STATE: RefCell<State> = const { RefCell::new(State {
-        catalog: None,
-        search: String::new(),
-    }) };
+    static STATE: RefCell<State> = const { RefCell::new(State { viewer: None }) };
 }
 
-/// Builds the catalogue once per world and shows the list in the panel.
+/// Builds the viewer once per world and shows the item list in the panel.
 pub(super) fn sync(game: &mut crate::game::Game<'_>) {
-    if !game.native_on(crate::game::jei::ID) {
+    if !game.native_on(jei::ID) {
         return;
     }
     if game.native_player().is_none() {
-        STATE.with(|s| {
-            let mut s = s.borrow_mut();
-            s.catalog = None;
-            s.search.clear();
-        });
+        STATE.with(|s| s.borrow_mut().viewer = None);
         return;
     }
-    let built = STATE.with(|s| s.borrow().catalog.is_some());
-    if built {
+    if STATE.with(|s| s.borrow().viewer.is_some()) {
         return;
     }
     let Some(catalog) = game.native_recipes() else {
         return;
     };
-    let search = STATE.with(|s| s.borrow().search.clone());
-    let stacks = list(&catalog, &search);
-    game.native_panel_items(crate::game::jei::ID, stacks);
-    STATE.with(|s| s.borrow_mut().catalog = Some(catalog));
+    let (viewer, out) = Viewer::new(items(&catalog), recipes(&catalog));
+    STATE.with(|s| s.borrow_mut().viewer = Some(viewer));
+    if let Err(error) = apply(game, out) {
+        game.native_chat(&format!("JEI: {error}"));
+    }
 }
 
-/// The panel's events: the search box, R/U over a stack, and Back.
+/// The panel's events: search, clicks, R/U, tabs, pages and the action button.
 pub(super) fn event(game: &mut crate::game::Game<'_>, event: &NativePanelEvent) {
-    if !game.native_on(crate::game::jei::ID) {
+    if !game.native_on(jei::ID) {
         return;
     }
-    match event {
-        NativePanelEvent::Search(text) => {
-            let Some(catalog) = catalog() else {
-                return;
-            };
-            STATE.with(|s| s.borrow_mut().search = text.clone());
-            game.native_panel_items(crate::game::jei::ID, list(&catalog, text));
+    let Some(event) = convert_event(event) else {
+        return;
+    };
+    let known = game.native_known_recipes();
+    let recipe_key = game.native_mod_key(jei::ID, "recipe", "key.keyboard.r");
+    let uses_key = game.native_mod_key(jei::ID, "uses", "key.keyboard.u");
+    let give = jei::give(game.native_setting(jei::ID, "give").as_deref());
+    let ctx = Context {
+        recipe_key: &recipe_key,
+        uses_key: &uses_key,
+        give,
+        // `native_give` succeeds in creative only: try, and fall back below.
+        creative: give,
+        known: &known,
+    };
+
+    let mut fallback = false;
+    for out in handle(&event, &ctx) {
+        if let Out::Give { item, count } = out {
+            if game.native_give(&item, count).is_err() {
+                fallback = true;
+            }
+            continue;
         }
-        NativePanelEvent::Key { key, stack } => {
-            let recipes = game.native_mod_key(crate::game::jei::ID, "recipe", "key.keyboard.r");
-            let uses = game.native_mod_key(crate::game::jei::ID, "uses", "key.keyboard.u");
-            let Some(catalog) = catalog() else {
-                return;
-            };
-            if key == &recipes {
-                open(game, &catalog, stack, false);
-            } else if key == &uses {
-                open(game, &catalog, stack, true);
+        if let Err(error) = apply(game, out) {
+            game.native_chat(&format!("JEI: {error}"));
+        }
+    }
+    if fallback {
+        // Survival: the same click opens the recipes, as JEI without cheat mode.
+        let ctx = Context {
+            give: false,
+            creative: false,
+            ..ctx
+        };
+        for out in handle(&event, &ctx) {
+            if let Err(error) = apply(game, out) {
+                game.native_chat(&format!("JEI: {error}"));
             }
         }
-        NativePanelEvent::Back => {
-            game.native_panel_recipes(crate::game::jei::ID, "", Vec::new(), 0, Vec::new());
-        }
-        _ => {}
     }
 }
 
-fn catalog() -> Option<Arc<NativeRecipes>> {
-    STATE.with(|s| s.borrow().catalog.clone())
+fn handle(event: &Event, ctx: &Context<'_>) -> Vec<Out> {
+    STATE.with(|s| {
+        let mut state = s.borrow_mut();
+        state
+            .viewer
+            .as_mut()
+            .map(|viewer| viewer.handle(event.clone(), ctx))
+            .unwrap_or_default()
+    })
 }
 
-/// The items the search keeps: JEI's words, phrases, exclusions and prefixes.
-fn list(catalog: &NativeRecipes, search: &str) -> Vec<NativeStack> {
-    use crate::game::jei as m;
-    let stack = |item: &str| NativeStack {
-        item: item.to_owned(),
-        count: 1,
-        components: String::new(),
-    };
-    let items: Vec<NativeStack> = catalog
-        .items
-        .iter()
-        .filter(|item| item.id != "minecraft:air")
-        .filter(|item| {
-            m::keeps(
-                &m::SearchItem {
-                    name: &item.name,
-                    id: &item.id,
-                    tags: &item.tags,
-                },
-                search,
-            )
-        })
-        .map(|item| stack(&item.id))
-        .collect();
-    // The panel goes away when its list is empty, and with it the search box
-    // and the events: keep one invisible slot (count 0) so a search that finds
-    // nothing can still be cleared.
-    if items.is_empty() {
+/// The viewer's size, for `/jei`; none outside a world.
+pub(super) fn counts() -> Option<(usize, usize)> {
+    STATE.with(|s| {
+        s.borrow()
+            .viewer
+            .as_ref()
+            .map(|viewer| (viewer.item_count(), viewer.recipe_count()))
+    })
+}
+
+fn apply(game: &mut crate::game::Game<'_>, out: Out) -> Result<(), String> {
+    match out {
+        Out::Items(stacks) => {
+            game.native_panel_items(jei::ID, panel_stacks(stacks));
+            Ok(())
+        }
+        Out::Recipes {
+            title,
+            tabs,
+            tab,
+            views,
+        } => {
+            game.native_panel_recipes(
+                jei::ID,
+                &title,
+                to_native(tabs),
+                tab,
+                views.into_iter().map(native_view).collect(),
+            );
+            Ok(())
+        }
+        Out::Give { item, count } => game.native_give(&item, count),
+        Out::Place { book_id, all } => game.native_place_recipe(book_id, all),
+        Out::Say(text) => {
+            game.native_chat(&text);
+            Ok(())
+        }
+    }
+}
+
+/// The game's stacks. An empty list keeps one invisible slot: the panel (and
+/// its search box and events) goes away when the list is empty.
+fn panel_stacks(stacks: Vec<Stack>) -> Vec<NativeStack> {
+    if stacks.is_empty() {
         return vec![NativeStack {
             item: "minecraft:air".to_owned(),
             count: 0,
             components: String::new(),
         }];
     }
-    items
+    to_native(stacks)
 }
 
-/// Opens the recipes (`uses` false) or uses of an item.
-fn open(
-    game: &mut crate::game::Game<'_>,
-    catalog: &NativeRecipes,
-    stack: &NativeStack,
-    uses: bool,
-) {
-    let views: Vec<NativeRecipeView> = catalog
-        .recipes
-        .iter()
-        // A recipe with no ingredients says nothing in a list of recipes.
-        .filter(|r| !r.slots.is_empty())
-        .filter(|r| matches(catalog, r, stack, uses))
-        .take(256)
-        .map(|r| view(catalog, r))
-        .collect();
-    if views.is_empty() {
-        game.native_chat(if uses {
-            "No uses for this item"
-        } else {
-            "No recipes for this item"
-        });
-        return;
+fn to_native(stacks: Vec<Stack>) -> Vec<NativeStack> {
+    stacks
+        .into_iter()
+        .map(|s| NativeStack {
+            item: s.item,
+            count: s.count,
+            components: s.components,
+        })
+        .collect()
+}
+
+fn native_view(view: View) -> NativeRecipeView {
+    NativeRecipeView {
+        layout: match view.layout {
+            Layout::Grid => NativeRecipeLayout::Grid,
+            Layout::Cooking => NativeRecipeLayout::Cooking,
+            Layout::Single => NativeRecipeLayout::Single,
+            Layout::Smithing => NativeRecipeLayout::Smithing,
+            Layout::Brewing => NativeRecipeLayout::Brewing,
+        },
+        width: view.width,
+        height: view.height,
+        slots: view.slots.into_iter().map(to_native).collect(),
+        results: to_native(view.results),
+        note: view.note,
+        action: view.action,
     }
-    let name = catalog
-        .items
-        .iter()
-        .find(|i| i.id == stack.item)
-        .map_or(stack.item.as_str(), |i| i.name.as_str());
-    let title = format!("{}: {name}", if uses { "Uses" } else { "Recipes" });
-    let tab = NativeStack {
+}
+
+fn convert_event(event: &NativePanelEvent) -> Option<Event> {
+    Some(match event {
+        NativePanelEvent::Search(text) => Event::Search(text.clone()),
+        NativePanelEvent::Clicked { index, right } => Event::Clicked {
+            index: *index as usize,
+            right: *right,
+        },
+        NativePanelEvent::Key { key, stack } => Event::Key {
+            key: key.clone(),
+            stack: stack_of(stack),
+        },
+        NativePanelEvent::Tab(tab) => Event::Tab(*tab as usize),
+        NativePanelEvent::Back => Event::Back,
+        NativePanelEvent::SlotClicked { stack, right, .. } => Event::SlotClicked {
+            stack: stack_of(stack),
+            right: *right,
+        },
+        NativePanelEvent::Action(index) => Event::Action(*index as usize),
+        _ => return None,
+    })
+}
+
+fn stack_of(stack: &NativeStack) -> Stack {
+    Stack {
         item: stack.item.clone(),
-        count: 1,
-        components: stack.components.clone(),
-    };
-    game.native_panel_recipes(crate::game::jei::ID, &title, vec![tab], 0, views);
-}
-
-fn matches(catalog: &NativeRecipes, recipe: &NativeRecipe, want: &NativeStack, uses: bool) -> bool {
-    if uses {
-        recipe
-            .slots
-            .iter()
-            .flatten()
-            .any(|s| same(catalog, s, want))
-    } else {
-        recipe.results.iter().any(|s| same(catalog, s, want))
-    }
-}
-
-fn same(catalog: &NativeRecipes, stack: &NativeRecipeStack, want: &NativeStack) -> bool {
-    let same_item = catalog
-        .items
-        .get(stack.item as usize)
-        .is_some_and(|item| item.id == want.item);
-    same_item && (want.components.is_empty() || stack.components == want.components)
-}
-
-fn convert(catalog: &NativeRecipes, stack: &NativeRecipeStack) -> NativeStack {
-    NativeStack {
-        item: catalog
-            .items
-            .get(stack.item as usize)
-            .map_or_else(|| "minecraft:air".to_owned(), |item| item.id.clone()),
         count: stack.count,
         components: stack.components.clone(),
     }
 }
 
-fn view(catalog: &NativeRecipes, recipe: &NativeRecipe) -> NativeRecipeView {
-    let slots = recipe
-        .slots
+fn items(catalog: &NativeRecipes) -> Vec<Item> {
+    catalog
+        .items
         .iter()
-        .map(|slot| slot.iter().map(|s| convert(catalog, s)).collect())
-        .collect();
-    let results = recipe.results.iter().map(|s| convert(catalog, s)).collect();
-    let (layout, width, height, note) = match recipe.kind {
-        NativeRecipeKind::CraftingShaped => (
-            NativeRecipeLayout::Grid,
-            recipe.width,
-            recipe.height,
-            String::new(),
-        ),
-        NativeRecipeKind::CraftingShapeless => {
-            let n = recipe.slots.len() as u32;
-            let width = match n {
-                0 | 1 => 1,
-                2..=4 => 2,
-                _ => 3,
-            };
-            (
-                NativeRecipeLayout::Grid,
-                width,
-                n.div_ceil(width).max(1),
-                "Shapeless".to_owned(),
-            )
-        }
-        NativeRecipeKind::Smelting
-        | NativeRecipeKind::Blasting
-        | NativeRecipeKind::Smoking
-        | NativeRecipeKind::Campfire => {
-            let seconds = recipe.cooking_time as f32 / 20.0;
-            (
-                NativeRecipeLayout::Cooking,
-                1,
-                1,
-                format!(
-                    "{seconds} s, {} XP",
-                    (recipe.experience * 100.0).round() / 100.0
-                ),
-            )
-        }
-        NativeRecipeKind::Stonecutting => (NativeRecipeLayout::Single, 1, 1, String::new()),
-        NativeRecipeKind::Smithing => (NativeRecipeLayout::Smithing, 3, 1, String::new()),
-        NativeRecipeKind::Brewing => (NativeRecipeLayout::Brewing, 2, 1, String::new()),
-    };
-    NativeRecipeView {
-        layout,
-        width,
-        height,
-        slots,
-        results,
-        note,
-        action: (recipe.book_id >= 0).then_some(false),
+        .map(|item| Item {
+            id: item.id.clone(),
+            name: item.name.clone(),
+            tags: item.tags.clone(),
+        })
+        .collect()
+}
+
+fn recipes(catalog: &NativeRecipes) -> Vec<Recipe> {
+    catalog
+        .recipes
+        .iter()
+        // A recipe with no ingredients says nothing in a list of recipes.
+        .filter(|recipe| !recipe.slots.is_empty())
+        .map(|recipe| Recipe {
+            kind: kind(recipe.kind),
+            width: recipe.width,
+            height: recipe.height,
+            slots: ingredient_slots(&recipe.slots),
+            results: ingredient_list(&recipe.results),
+            cooking_time: recipe.cooking_time,
+            experience: recipe.experience,
+            book_id: recipe.book_id,
+        })
+        .collect()
+}
+
+fn ingredient_slots(slots: &[Vec<NativeRecipeStack>]) -> Vec<Vec<Ingredient>> {
+    slots.iter().map(|slot| ingredient_list(slot)).collect()
+}
+
+fn ingredient_list(stacks: &[NativeRecipeStack]) -> Vec<Ingredient> {
+    stacks
+        .iter()
+        .map(|stack| Ingredient {
+            item: stack.item,
+            count: stack.count,
+            components: stack.components.clone(),
+        })
+        .collect()
+}
+
+fn kind(kind: NativeRecipeKind) -> Kind {
+    match kind {
+        NativeRecipeKind::CraftingShaped => Kind::CraftingShaped,
+        NativeRecipeKind::CraftingShapeless => Kind::CraftingShapeless,
+        NativeRecipeKind::Smelting => Kind::Smelting,
+        NativeRecipeKind::Blasting => Kind::Blasting,
+        NativeRecipeKind::Smoking => Kind::Smoking,
+        NativeRecipeKind::Campfire => Kind::Campfire,
+        NativeRecipeKind::Stonecutting => Kind::Stonecutting,
+        NativeRecipeKind::Smithing => Kind::Smithing,
+        NativeRecipeKind::Brewing => Kind::Brewing,
     }
 }

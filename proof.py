@@ -1,6 +1,6 @@
 """JEI in a running modded game: Options > Mods shows the mod and its settings page, the panel beside a
 crafting table lists every item, the search box filters it, R opens the recipes of the item under the
-pointer, and Back returns to the items."""
+pointer, the station tabs and the "+" work, and Back walks the history."""
 import json
 import time
 from game import Game, difference
@@ -51,26 +51,34 @@ def table(g):
 
 def run(ctl, resources, out):
     with Game(ctl, resources, out) as g:
-        # 1. The row and its settings page.
+        # 1. The row and its settings page: "Click gives items" off by default,
+        #    and the switch persists.
         g.run("options", "mods")
         assert "JEI 0.0.1: ON" in g.labels(), g.labels()
         g.run("click", g.ids()["Settings"])
         page = g.labels()
-        assert "Debug: ON" in page, page
-        g.run("click", g.ids()["Debug: ON"])
+        assert "Click gives items: OFF" in page, page
+        g.run("click", g.ids()["Click gives items: OFF"])
         time.sleep(0.3)
-        stored = (g.home / DATA / "debug").read_text()
-        assert stored == "false", stored
-        g.run("click", g.ids()["Debug: OFF"])
+        stored = (g.home / DATA / "give").read_text()
+        assert stored == "true", stored
+        g.run("click", g.ids()["Click gives items: ON"])
         time.sleep(0.3)
+        assert (g.home / DATA / "give").read_text() == "false"
 
         # 2. The item list beside a crafting table.
         g.play()
         g.run("command", "clear @s")
+        # Unlock every recipe in the book and give the one input the transfer
+        # test places, so the "+" button is active.
+        g.run("command", "recipe give @s *")
+        g.run("give", "minecraft:diamond_block", "1")
+        time.sleep(0.5)
         table(g)
         stone = item_widget(g, "Stone")
         items = g.shot("1-items")
-        panel = ((stone[0] - 2 * SLOT) / g.run("ui")["gui_size"][0], 0.0, 1.0, 1.0)
+        width = g.run("ui")["gui_size"][0]
+        panel = ((stone[0] - 2 * SLOT) / width, 0.0, 1.0, 1.0)
 
         # 3. The search box filters the list.
         g.run("click-at", *map(str, search_box(g, stone)))
@@ -82,19 +90,55 @@ def run(ctl, resources, out):
         searched = g.shot("2-search")
         assert difference(items, searched, panel) > 4, "the panel did not change with the search"
 
-        # 4. R over the item opens its recipes; Back returns to the items.
+        # 4. R over the item opens its recipes, with a tab per station.
         diamond = item_widget(g, "Diamond")
         g.run("click-at", *map(str, diamond))
         g.run("key", "r", "tap")
         time.sleep(0.5)
-        assert "Back" in g.labels(), g.labels()
+        labels = g.labels()
+        assert "Back" in labels, labels
+        assert "Crafting Table tab" in labels, labels
+        assert "Furnace tab" in labels, labels
         recipes = g.shot("3-recipes")
         assert difference(searched, recipes, panel) > 4, "the recipe page did not draw"
-        g.run("click", g.ids()["Back"])
-        time.sleep(0.3)
-        assert "Diamond" in g.labels(), g.labels()
 
-        # 5. A search that matches nothing empties the list (no panic).
+        # 5. "+" places the recipe's ingredients in the open grid, as the book does.
+        plus = next((l for l in labels if l.startswith("+ ")), None)
+        assert plus, labels
+        g.run("click", g.ids()[plus])
+        time.sleep(0.5)
+        placed = [slot.get("item") for slot in g.run("screen").get("slots", [])]
+        assert "minecraft:diamond_block" in placed, placed
+
+        # 6. A recipe slot opens that stack's recipes; Back walks the history.
+        slot = next(
+            (l for l in labels if l.startswith("Block of Diamond ") and l.endswith(":0")),
+            None,
+        )
+        assert slot, labels
+        g.run("click", g.ids()[slot])
+        time.sleep(0.5)
+        assert "Furnace tab" not in g.labels(), "not the Block of Diamond page"
+        g.run("click", g.ids()["Back"])
+        time.sleep(0.4)
+        assert "Furnace tab" in g.labels(), g.labels()
+
+        # 7. The furnace tab shows the smelting recipe.
+        g.run("click", g.ids()["Furnace tab"])
+        time.sleep(0.4)
+        smelted = g.labels()
+        assert any(l.startswith("Diamond Ore ") for l in smelted), smelted
+
+        # 8. Back returns to the item list (one page per open and per R press).
+        for _ in range(5):
+            labels = g.labels()
+            if "Back" not in labels:
+                break
+            g.run("click", g.ids()["Back"])
+            time.sleep(0.3)
+        assert "Back" not in g.labels(), g.labels()
+
+        # 9. A search that matches nothing keeps the panel (and the search box).
         g.run("click-at", *map(str, search_box(g, stone)))
         type_text(g, "zzzznotanitem", "diamond")
         time.sleep(0.4)
