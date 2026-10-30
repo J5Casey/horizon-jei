@@ -15,7 +15,7 @@ feature-by-feature state against JEI.
 
 Not there yet: bookmarks, click-on-slot (only R/U), tooltips, the creative
 inventory panel, the non-recipe categories (anvil, grindstone, compost, fuel),
-and shift on "+". Those need new Horizon hooks; the plan explains which.
+and shift on "+". Those need new Horizon hooks; [`docs/roadmap.md`](docs/roadmap.md) lists them.
 
 ## Install
 

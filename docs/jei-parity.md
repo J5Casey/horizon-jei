@@ -1,11 +1,12 @@
 # JEI ↔ Horizon parity matrix
 
 Reference: JEI 31.17.0 for Minecraft 26.3 (`JustEnoughItems/`, branch `26.3`, HEAD `9f285707e`).
-Target: Horizon 26.3, native hook points API 7 (`crates/horizon-client/src/game/native_hooks.rs`),
-item panel API 2 (`native_panel.rs`, `native_panel_recipes.rs`).
+Target: Horizon 26.3, native hook points API 2 or later (the bundle names 2 in `horizon-native.json`;
+it was tested on `1da354b`, API 3, `crates/horizon-client/src/game/native_hooks.rs`), item panel API 2
+(`native_panel.rs`, `native_panel_recipes.rs`).
 
 Status: **P** portable with today's hooks · **H** needs a new hook (named) · **X** not possible today (reason).
-Phase: the phase in `tasks/plan.md` that delivers it.
+Phase: the phase of [`roadmap.md`](roadmap.md) that delivers it.
 
 ## 1. Ingredient list and overlay
 

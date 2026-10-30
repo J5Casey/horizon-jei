@@ -103,4 +103,4 @@ a language means a variant in `Lang` and its strings; the rest of the UI reads t
 1. Put the logic in `runtime.rs` with a unit test.
 2. Convert its inputs/outputs in `glue.rs` only.
 3. If it needs game data Horizon does not expose, add it to `docs/jei-parity.md` as `H` and to the
-   upstream RFC (`tasks/todo.md`, task 3.1) instead of reaching for a private `Game` field.
+   hook list in `docs/roadmap.md` instead of reaching for a private `Game` field.
