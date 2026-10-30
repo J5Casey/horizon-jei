@@ -5,8 +5,16 @@ reimplementation of Minecraft: Java Edition 26.3. It is a port of
 [JustEnoughItems](https://github.com/mezz/JustEnoughItems) (JEI), rebuilt on
 Horizon's native hook points.
 
-Status: **Phase 0 (skeleton)**. See [`../tasks/plan.md`](../tasks/plan.md) and
-[`../tasks/todo.md`](../tasks/todo.md).
+Status: **Phase 0 done, Phase 2 in progress.** The panel viewer lists every
+item, searches with JEI's grammar (`"phrases"`, `-exclusions`, `|`, `@mod`,
+`#tag`), R/U over any stack opens its recipes or uses with a tab per station,
+"+" places a known recipe, and clicks give items in creative when the setting
+is on. See [`../tasks/plan.md`](../tasks/plan.md),
+[`../tasks/todo.md`](../tasks/todo.md) and [`docs/jei-parity.md`](docs/jei-parity.md).
+
+Not there yet: bookmarks, click-on-slot (only R/U), tooltips, the creative
+inventory panel, and the non-recipe categories (anvil, grindstone, compost,
+fuel). Those need new Horizon hooks; the plan explains which.
 
 ## Install (once published)
 

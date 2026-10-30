@@ -18,7 +18,10 @@ Result: `{"proof": "jei", "ok": true, "filtered": 63}`.
 | `native_panel_recipes` draws tabs, layouts, notes and the action button | `Grid`, `Shapeless`, cooking note `10 s, 1 XP`, `+` buttons |
 | `Back` returns to the items | proof step 4 |
 | The five fixed layouts cover the nine vanilla recipe kinds | mapping in `glue.rs` |
-| The mod row, its page and settings persistence work (`native_setting`/`native_set_setting`) | proof steps 1-2, file `horizon-mods/.horizon-mod-data/jei/debug` |
+| Station tabs, the `+` action button and Back work | proof steps 4-8 |
+| `+` places a recipe the book holds | after `/recipe give @s *` and giving the input, the crafting grid received the Block of Diamond |
+| A recipe slot opens that stack's recipes, and Back walks the history | proof step 6 |
+| The mod row, its page and settings persistence work (`native_setting`/`native_set_setting`) | proof step 1, file `horizon-mods/.horizon-mod-data/jei/give` |
 
 ## Surprises and decisions
 
@@ -42,9 +45,14 @@ Result: `{"proof": "jei", "ok": true, "filtered": 63}`.
 ## Still to check (Phase 2)
 
 - Creative inventory: the panel does not show there (`browser_sync` requires `Screen::Inventory`).
-- `native_give` and `native_place_recipe` from a real click.
+- `native_give` and `native_place_recipe` from a real click: done for place (with the book unlocked);
+  give is only covered by the unit test and the settings toggle so far.
 - Searching while a recipe page is open; leaving the world with a page open.
 - Server (LAN) recipes: `native_recipes` sends only what the client knows.
+- Shift on the action button: the `Action` event carries no modifier, so `all` is always false
+  (needs a hook).
+- What the proof had to set up and a player does not: `/recipe give @s *` (unlock the book) and the
+  input item in the inventory. The `+` is greyed until both are true, as JEI's is.
 
 ## Timings (this machine, WSL2, 8 cores, llvmpipe)
 
