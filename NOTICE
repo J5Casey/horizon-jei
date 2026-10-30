@@ -1,0 +1,20 @@
+JEI for Horizon
+===============
+
+This mod is a port of JustEnoughItems (JEI), a Minecraft item and recipe viewer,
+to Horizon. JEI is:
+
+  Copyright (c) 2014-2015 mezz
+  Licensed under the MIT License.
+  https://github.com/mezz/JustEnoughItems
+
+Parts of this mod's behaviour, tests, UI strings and (from Phase 3 on) a few
+GUI sprites are derived from JEI's source, which is MIT-licensed; the original
+copyright notice above applies to those parts.
+
+This is an unofficial port. It is not made, endorsed or supported by mezz, the
+JEI team, Mojang, Microsoft, or the Horizon project.
+
+Horizon is a Rust reimplementation of Minecraft: Java Edition. Minecraft is a
+trademark of Mojang Synergies AB. This mod contains no Minecraft code or assets;
+it reads the game's own files at run time.
