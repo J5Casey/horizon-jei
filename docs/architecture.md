@@ -5,7 +5,10 @@ The mod is one horizon-mixins bundle, `mixins/jei/`, compiled into the game as t
 
 ```
 runtime.rs  -> crate::game::jei        the viewer: pure Rust, no game types, `cargo test`
-glue.rs     -> crate::game::jei_glue   the edges: game tables in, panel/give/place out
+glue.rs     -> crate::game::jei_glue   the edges: game tables in, panel/give/place out,
+                                       the overlay's state (the bar, the config)
+screen_post.rs tooltip.rs mouse_press.rs mouse_release.rs mouse_drag.rs
+                                       the overlay: what the game's screens give it
 list.rs settings.rs click.rs command.rs frame.rs event.rs   one helper per hook
 ```
 
@@ -18,19 +21,29 @@ list.rs settings.rs click.rs command.rs frame.rs event.rs   one helper per hook
 - Helpers stay one function each: read the hook's arguments, call `jei_glue::sync` or `::event`,
   write nothing else.
 
-## Hook points used (version 2)
+## Hook points used (version 313)
 
 | Hook | Helper | What it does |
 |---|---|---|
-| `native_frame` | `frame.rs` | Builds the viewer once per world; clears it when the world closes |
-| `native_panel_event` | `event.rs` | Search, click, R/U, tab, back, recipe-slot click, action button |
-| `native_mods` | `list.rs` | The row in Options > Mods, with the R and U keys |
-| `native_settings` / `_click` | `settings.rs`, `click.rs` | "Click gives items" |
-| `native_command` | `command.rs` | `/jei` (counts) and `/jei give` |
+| `native_frame` | `frame.rs` | Builds the viewer once per world; clears it when the world closes; runs what a bookmark click left behind |
+| `native_panel_event` | `event.rs` | Search, click, R/U, the bookmark key, tab, back, recipe-slot click, action button |
+| `native_mods` | `list.rs` | The row in Options > Mods, with the R, U and A keys |
+| `native_settings` / `_click` | `settings.rs`, `click.rs` | Give, language, order, tooltip hints, the bar |
+| `native_command` | `command.rs` | `/jei` (counts), `/jei give`, `/jei sort`, `/jei bookmarks clear`, `/jei config` |
+| `native_screen_render_post` | `screen_post.rs` | Draws the bookmark bar and its tooltip over a container screen |
+| `native_tooltip` | `tooltip.rs` | Appends the recipe/use hints and the bookmark mark to any item's tooltip |
+| `native_screen_mouse_button_pressed_pre` | `mouse_press.rs` | A click on a bookmark is the mod's (canceled), not the world's |
+| `native_screen_mouse_button_released_pre` | `mouse_release.rs` | A click that never left its slot opens the stack's recipes |
+| `native_screen_mouse_dragged_pre` | `mouse_drag.rs` | Dragging a bookmark over another slot moves it |
 
 Helpers called from `glue.rs`: `native_recipes`, `native_known_recipes`, `native_panel_items`,
 `native_panel_recipes`, `native_give`, `native_place_recipe`, `native_mod_key`, `native_setting`,
-`native_set_setting`, `native_chat`, `native_on`, `native_player`.
+`native_set_setting`, `native_chat`, `native_on`, `native_player`, `native_config_dir`,
+`native_fill`, `native_text`, `native_text_width`, `native_item_stack`.
+
+The config hooks and the drawing ones take `&self`, so the helpers bound to them take `&Game`
+(`value = "&*self"`); a click that has to change the panel is left in `glue.rs`'s pending list and run
+by `frame.rs` the same frame, where the game is `&mut`.
 
 ## Data flow
 
@@ -65,6 +78,11 @@ and shows the item list when the history is empty.
 | `Event` | what the player did, in the viewer's words |
 | `Out` | what the game is to do |
 | `Context` | the keys, the give setting, creative, and the book's ids |
+| `Variant` | an item with components: a row of the list of its own |
+| `Counts` | how many recipes make an item and how many use it, for the tooltips |
+| `Bookmarks` | the bar's stacks, their file, and what adding/removing/moving one does |
+| `Config` | the list's order, the tooltip hints, the bar |
+| `Bar` | the bar's places: two columns at the screen's corner, hit tests included |
 
 Mapping a recipe: `Kind -> Station` picks the tab, `Kind -> Layout` picks the drawing. Adding a
 category means adding a `Kind` (from a game hook) and its mapping.
@@ -81,8 +99,19 @@ category means adding a `Kind` (from a game hook) and its mapping.
   grid. `+` is shown greyed when the book doesn't hold the recipe, and the game refuses otherwise.
 - Creative is not exposed; `native_give` is tried and, when it refuses, the same click opens the
   recipes instead (JEI without cheat mode).
+- The game forwards every key press over a stack to the panel's owner, in a panel item or any screen
+  slot, and that is the bookmark key's only way in: it is not heard on a screen with a server title
+  (a chest) or in creative, where the panel is the official `recipes` mod's. There, bookmarks can be
+  used (the bar's clicks are the mod's) but not added.
 - The world's tables are built once per world. A content mod that changes recipes at run time would
   need a reload hook; content mods load their recipes at start, so this is enough today.
+- The bar's place is the screen's top left corner, the same on every screen: the panel's own layout
+  is the game's, and the hooks do not say where it put its grid. On a very narrow screen the widest
+  container windows (the merchant's) reach that corner.
+- Components are the game's syntax (`[potion="minecraft:strength"]`), read back with the same
+  `command_components` the panel uses, so a bookmark with components draws and stores its own stack.
+  An item's name for a components string is not exposed, so the tooltip of a variant says its base
+  item's name.
 
 ## Tests
 

@@ -1,8 +1,9 @@
 # JEI ↔ Horizon parity matrix
 
 Reference: JEI 31.17.0 for Minecraft 26.3 (`JustEnoughItems/`, branch `26.3`, HEAD `9f285707e`).
-Target: Horizon 26.3, native hook points API 2 or later (the bundle names 2 in `horizon-native.json`;
-it was tested on `1da354b`, API 3, `crates/horizon-client/src/game/native_hooks.rs`), item panel API 2
+Target: Horizon 26.3, native hook points API 313 or later (the bundle names 313, for
+`native_item_stack`; it was tested on Nightly 2026-11-07, `6560641`, API 411,
+`crates/horizon-client/src/game/native_hooks.rs`), item panel API 2
 (`native_panel.rs`, `native_panel_recipes.rs`).
 
 Status: **P** portable with today's hooks · **H** needs a new hook (named) · **X** not possible today (reason).
@@ -17,11 +18,12 @@ Phase: the phase of [`roadmap.md`](roadmap.md) that delivers it.
 | Scroll through the list with the wheel | `IngredientGrid`, `GridScrollMath` | game pages it; wheel goes to the hotbar | H `panel config` | 3 |
 | Hide the list with a key | `IClientToggleState` | mod can send an empty list | P | 2 |
 | Ingredient list in the creative inventory | `CreativeModeInventoryScreen` handler | panel only on `Screen::Inventory` | H `panel in creative` | 3 |
-| Subtypes: potions, enchanted books, firework stars/rockets | `plugins/vanilla/ingredients/*Factory`, `subtypes/*` | `NativeStack.components` (vanilla item syntax) | P + data | 2 |
+| Subtypes: potions, tipped arrows | `plugins/vanilla/ingredients/*Factory`, `subtypes/*` | `NativeStack.components`; the mod lists every `(item, components)` pair the recipe tables name, eight per item | P | 3 |
+| Subtypes: enchanted books, firework stars/rockets, banner patterns | `subtypes/*` | their variants are not in any recipe table, and an item has no name for components | H `item name from components` | 5 |
 | Fluid ingredients (loader types) | `api/constants/VanillaTypes`, `plugins/vanilla/ingredients/fluid` | panel takes items only | H `fluid stack` | 4 |
 | Custom ingredient types from mods | `IIngredientType`, `IModIngredientRegistration` | no registry for ingredient types | X (no plugin ABI; see §9) | — |
-| Configurable sort stages (name, tag, mod, durability) | `ingredients/IngredientSorter*.java` | mod-side index | P | 2 |
-| "Edit mode": hide ingredients from the list | `gui/config/EditModeConfig` | mod-side (own config file) | P | 3 |
+| Configurable sort stages (name, tag, mod, durability) | `ingredients/IngredientSorter*.java` | mod-side index: by name or by id (`/jei sort`, the settings page), kept in `config/jei/jei.cfg` | P (two stages) | 3 |
+| "Edit mode": hide ingredients from the list | `gui/config/EditModeConfig` | mod-side (own config file) | P | 5 |
 
 ## 2. Search
 
@@ -34,7 +36,7 @@ Phase: the phase of [`roadmap.md`](roadmap.md) that delivers it.
 | `$tooltip` prefix | `ElementPrefixParser`, `getTooltipStrings` | no tooltip strings for an item list | H `tooltip text` | 3 |
 | `%creative tab` prefix | `ElementPrefixParser` | no creative tab data | H `creative tabs` | 4 |
 | Grammar: quotes, `-` exclusion, `|` alternatives, escape | `SearchTokenizer` | mod-side | P | 1 |
-| Search modes (on / off / require prefix) | `common/config/SearchMode` | mod-side config | P | 2 |
+| Search modes (on / off / require prefix) | `common/config/SearchMode` | mod-side config; the file's `search` key is not read yet | P (not built) | 5 |
 | Completion popup and syntax highlighting | `SearchCompletionOverlay`, `SearchSyntaxHighlighter` | the search box belongs to the game; no draw hook | H `search box draw` | 3 |
 | Ingredient aliases and advanced search registration | `api/search/ISearchStorageBuilderFactory` | none | X (plugin ABI) | — |
 
@@ -68,9 +70,9 @@ Phase: the phase of [`roadmap.md`](roadmap.md) that delivers it.
 | U over an item shows uses | same | same | P | 2 |
 | Click a panel item: recipes; right click: uses | `IngredientListOverlay` | `Clicked { index, right }` | P | 2 |
 | Click a **screen** slot: recipes; right click: uses | `GuiContainerHandler` | only keys, no mouse events on screen slots | H `slot event` | 3 |
-| Tooltip hint "R: recipes / U: uses" | `api/gui/handlers/IGuiContainerHandler` | game tooltip only | H `tooltip lines` | 3 |
-| Ingredient ghost on the cursor (drag to a slot) | `gui/ghost/*`, `IGhostIngredientHandler` | none | H `cursor stack` | 3 |
-| Hover an ingredient: highlight matching slots | `GuiContainerHandler` | none | H `slot highlight` | 4 |
+| Tooltip hint "R: recipes / U: uses" | `api/gui/handlers/IGuiContainerHandler` | appended in `native_tooltip`, for every item tooltip the game shows, the panel's included | P | 3 |
+| Ingredient ghost on the cursor (drag to a slot) | `gui/ghost/*`, `IGhostIngredientHandler` | none | H `cursor stack` | 4 |
+| Hover an ingredient: highlight matching slots | `GuiContainerHandler` | none (needs the slot's index) | H `slot event` | 4 |
 | Back/forward through recipe pages | `RecipeGuiLogic` | mod-side history + `Back` event | P | 2 |
 | Mouse wheel changes recipe page | `RecipesGui` scroll | game pages recipes | P | 2 |
 
@@ -78,12 +80,12 @@ Phase: the phase of [`roadmap.md`](roadmap.md) that delivers it.
 
 | JEI feature | Source | Horizon today | Status | Phase |
 |---|---|---|---|---|
-| Bookmark an ingredient (A key) | `gui/bookmarks/BookmarkManager` | none | H `bookmark overlay` | 3 |
-| Bookmark bar beside the list, left or right | `BookmarkOverlay` | none | H `bookmark overlay` | 3 |
-| Bookmark recipes, not only ingredients | `RecipeBookmark` | none | H `bookmark overlay` | 3 |
-| Drag to reorder, right click to delete | `BookmarkList` | none | H `bookmark overlay` | 3 |
-| Persist bookmarks across worlds | `BookmarkCodec` | mod-side file in `native_data_dir` | P once drawn | 3 |
-| Bookmark tooltip features (count, ids) | `BookmarkTooltipFeature` | none | H `tooltip lines` | 4 |
+| Bookmark an ingredient (A key) | `gui/bookmarks/BookmarkManager` | the panel's `Key` event carries the stack under the pointer, in a panel item or any screen slot | P | 3 |
+| Bookmark bar beside the list, left or right | `BookmarkOverlay` | the mod's own bar, drawn in `native_screen_render_post`: two columns of twelve at the screen's top left corner | P (fixed place) | 3 |
+| Bookmark recipes, not only ingredients | `RecipeBookmark` | none: a bookmark is a stack | H `recipe bookmark` | 5 |
+| Drag to reorder, right click to delete | `BookmarkList` | drag reorders, shift-click or the middle button deletes; a right click opens the uses | P (other buttons) | 3 |
+| Persist bookmarks across worlds | `BookmarkCodec` | `config/jei/bookmarks.txt`, read once per run | P | 3 |
+| Bookmark tooltip features (count, ids) | `BookmarkTooltipFeature` | the bar draws its own tooltip: the item's name and what a click does | P (name only) | 3 |
 
 ## 6. Transfer and cheat mode
 
@@ -99,10 +101,10 @@ Phase: the phase of [`roadmap.md`](roadmap.md) that delivers it.
 
 | JEI feature | Source | Horizon today | Status | Phase |
 |---|---|---|---|---|
-| Draw over a container screen | `RecipesGui`, `overlay/*` | screens draw after the HUD; the HUD is blurred behind them | H `screen frame` | 3 |
-| Draw an item icon outside the panel | `DrawableIngredientRenderer` | only the panel draws items | H `item draw` | 3 |
+| Draw over a container screen | `RecipesGui`, `overlay/*` | `native_screen_render_post`, after the screen drew, with `native_fill`/`native_text` | P | 3 |
+| Draw an item icon outside the panel | `DrawableIngredientRenderer` | `native_item_stack`, with the stack's components and its decorations | P | 3 |
 | Nine-slice and animated sprites | `DrawableSprite`, `.png.mcmeta` | `HudBatch::sprite` on the GUI atlas | P | 3 |
-| Custom tooltips with several lines | `ITooltipBuilder` | game item tooltip only | H `tooltip lines` | 3 |
+| Custom tooltips with several lines | `ITooltipBuilder` | the overlay draws its own box and lines; the game's tooltips take lines in `native_tooltip` | P | 3 |
 | Own screen with tabs, page arrows, buttons | `RecipesGui` | panel recipe pages have them | P | 2 |
 | Options/config button in the overlay | `overlay/elements/*` | settings page in Options > Mods | P | 2 |
 | GUI scale and layout for odd sizes | `GuiProperties`, `ScreenHelper` | panel layout handles height | P | 2 |
@@ -145,20 +147,30 @@ Sections 1 (except side/scroll/creative), 2 (except `$`/`%`/completion), 3 (the 
 kinds), 4 (R/U, clicks, back/forward), 6 (crafting transfer, creative give), 7 (panel pages, settings),
 8 (keys, config command, server sync) and 10 (own localisation, performance budgets).
 
-## What v1.0 needs from Horizon (the upstream RFC, task 3.1)
+## What v0.2 adds
 
-1. `native_screen` — the open screen's kind and GUI rect.
-2. `native_screen_frame` — draw above the container screen.
-3. `native_screen_event` — hover/click on the screen's slots, with the slot index.
-4. `native_item` — draw an item icon into a `HudBatch`.
-5. `native_tooltip` — add lines to an item's tooltip.
-6. `native_cursor` — read and set the carried stack (ghost ingredients).
-7. `native_panel_config` — side, width, scroll, creative inventory.
-8. `native_panel_limits` — more tabs/recipes; category layout declaration.
-9. `native_info` — anvil/grindstone/compost/fuel tables and ingredient info pages.
-10. `native_tooltip_text` — tooltip strings for `$` search.
-11. `native_give` outside creative (server-authoritative).
-12. `native_language` — the player's language for mod UI strings.
+Section 1's subtypes (every component variant the recipe tables name), 2's sort stage, 4's tooltip
+hints, all of section 5 (bookmarks, with their own bar, clicks, drags and file) and 7's overlay: the
+screen render hook, item drawing with `native_item_stack` and the mod's own tooltip box.
+
+## What the later phases need from Horizon
+
+The hook points 0.2.0 asked for are in: `native_screen_render_post`, `native_tooltip`, `native_item`,
+`native_config_dir`. What is left:
+
+1. `native_screen_slot_event` — hover/click on a container slot, with the slot's index (click-to-see,
+   highlighting, drag-to-slot).
+2. `native_cursor` — read and set the carried stack (ghost ingredients).
+3. `native_panel_config` — side, width, scroll, creative inventory.
+4. `native_panel_limits` — more tabs/recipes; category layout declaration.
+5. `native_info` — anvil/grindstone/compost/fuel tables and ingredient info pages.
+6. `native_item_name` — an item's name for a components string (the enchanted book, firework and
+   banner subtypes).
+7. `native_tooltip_text` — tooltip strings for `$` search.
+8. `native_creative_tabs` — the creative tab data for `%` search.
+9. `native_give` outside creative (server-authoritative).
+10. `native_recipe_transfer` — place an ingredient into a station's slots (server-side moves).
+11. `native_language` — the player's language for mod UI strings.
 
 Each one is additive and can be a helper plus, where needed, a hook point; all fit Horizon's rule that
 hook points are only ever added.

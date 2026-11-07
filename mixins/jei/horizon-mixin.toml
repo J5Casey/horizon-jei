@@ -1,13 +1,13 @@
 [mod]
 id = "jei"
-version = "0.1.0"
+version = "0.2.0"
 priority = 100
 
-# The commit this bundle was tested on. It hooks only the native hook points,
-# so the launcher builds it on any Horizon whose hook points are version 2 or
-# later (compatibility.json, "hooks").
+# The commit this bundle was tested on (Nightly 2026-11-07). It hooks only the
+# native hook points, so the launcher builds it on any Horizon whose hook
+# points are version 313 or later (compatibility.json, "hooks").
 [compatibility]
-horizon_revision = "1da354b67a509812c4141b67de2affd6de65c342"
+horizon_revision = "6560641ba51a452f6bc2407baa4eb1b3be517ca8"
 
 # runtime.rs becomes the module crate::game::jei.
 [[module]]
@@ -27,7 +27,8 @@ source = "glue.rs"
 [[injection]]
 id = "frame"
 kind = "HEAD"
-target = "horizon_client::game::native_hooks::Game<'_>::native_frame"
+hook = "frame"
+hook_version = 1
 helper = "frame.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -84,4 +85,73 @@ bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "mod_id", ty = "&str", value = "mod_id" },
   { name = "event", ty = "&crate::game::native_hooks::NativePanelEvent", value = "event" },
+]
+
+# The overlay: the game's screens and item tooltips.
+
+[[injection]]
+id = "screen_post"
+kind = "HEAD"
+hook = "screen_render_post"
+hook_version = 1
+helper = "screen_post.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "batch", ty = "&mut horizon_client::hud::HudBatch", value = "&mut *batch" },
+  { name = "screen", ty = "&crate::game::native_hooks::NativeScreenView<'_>", value = "screen" },
+]
+
+[[injection]]
+id = "mouse_press"
+kind = "HEAD"
+hook = "screen_mouse_button_pressed_pre"
+hook_version = 1
+helper = "mouse_press.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "screen", ty = "&crate::game::native_hooks::NativeScreenView<'_>", value = "screen" },
+  { name = "button", ty = "i32", value = "button" },
+  { name = "modifiers", ty = "u32", value = "modifiers" },
+  { name = "canceled", ty = "&mut bool", value = "&mut *canceled" },
+]
+
+[[injection]]
+id = "mouse_release"
+kind = "HEAD"
+hook = "screen_mouse_button_released_pre"
+hook_version = 1
+helper = "mouse_release.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "screen", ty = "&crate::game::native_hooks::NativeScreenView<'_>", value = "screen" },
+  { name = "button", ty = "i32", value = "button" },
+  { name = "modifiers", ty = "u32", value = "modifiers" },
+  { name = "canceled", ty = "&mut bool", value = "&mut *canceled" },
+]
+
+[[injection]]
+id = "mouse_drag"
+kind = "HEAD"
+hook = "screen_mouse_dragged_pre"
+hook_version = 1
+helper = "mouse_drag.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "screen", ty = "&crate::game::native_hooks::NativeScreenView<'_>", value = "screen" },
+  { name = "button", ty = "i32", value = "button" },
+  { name = "delta", ty = "[f32; 2]", value = "delta" },
+  { name = "modifiers", ty = "u32", value = "modifiers" },
+  { name = "canceled", ty = "&mut bool", value = "&mut *canceled" },
+]
+
+[[injection]]
+id = "tooltip"
+kind = "HEAD"
+hook = "tooltip"
+hook_version = 1
+helper = "tooltip.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "stack", ty = "&horizon_client::items::ItemStack", value = "stack" },
+  { name = "lines", ty = "&mut Vec<(horizon_client::text::Text, u32)>", value = "&mut *lines" },
 ]

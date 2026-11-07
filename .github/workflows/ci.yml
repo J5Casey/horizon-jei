@@ -20,7 +20,7 @@ jobs:
       - name: format
         run: |
           cargo fmt --check
-          rustfmt --check mixins/jei/*.rs
+          rustfmt --edition 2024 --check mixins/jei/*.rs
       - name: clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: test

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.0 — Overlay and bookmarks
+
+The overlay JEI is known for, on Horizon's screen hooks. It needs hook points
+of version 313 or later (`native_item_stack`); it was tested on Nightly
+2026-11-07, `6560641`.
+
+- **Bookmarks.** The **A** key bookmarks the stack under the pointer, over a
+  panel item or any slot of the container screen. The bar sits at the screen's
+  top left corner, two columns of twelve: the left button opens a stack's
+  recipes, the right one its uses, shift-click or the middle button takes the
+  bookmark away, and dragging a slot moves it. Each slot shows the stack, and
+  hovering it draws the item's name and its actions.
+- **Kept between sessions.** `config/jei/bookmarks.txt` holds the bar and
+  `config/jei/jei.cfg` the rest; `/jei config` says where they are.
+- **Item tooltips** now say `R: Recipes (12)` and `U: Uses (3)`, and mark the
+  bookmarked stack with a star. They go into every tooltip the game shows,
+  the panel's included, and count exactly: a stack with components counts the
+  recipes the tables name for those components.
+- **Subtypes**: every `(item, components)` pair the recipe tables name is an
+  item of its own in the list, so the potions and the tipped arrows are
+  there like JEI's subtypes. Up to eight variants per item.
+- **The list's order**: by name or by id, from the settings page or
+  `/jei sort name|id`, kept in the config file.
+- New commands and settings: `/jei sort`, `/jei bookmarks clear`, `/jei config`;
+  the settings page's buttons now cover the order, the tooltip hints and the bar.
+- Protections: a click on the bar is the mod's, never the world's, and the
+  overlay draws only over container screens.
+
+Verified with `cargo test` (43) and `native.py check` on Nightly `6560641`.
+
 ## 0.1.0 — JEI Core
 
 The first playable viewer, on Horizon's native hook points (version 2). No
