@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 — World switch cache fix
+
+A patch release fixing viewer cache persistence across world transitions when JEI is disabled:
+
+- **Fix:** Clear cached viewer on world unload even while JEI is disabled. Previously, `sync` returned early when `native_on(jei::ID)` was false before the unload branch, leaving the old world's viewer in memory across world switches.
+- **Session management:** Encapsulate viewer lifecycle into `Session` in `runtime.rs`, ensuring the cache is unconditionally cleared upon leaving a world.
+- **Regression test:** Cover the disable -> switch worlds -> re-enable lifecycle sequence.
+
+Verified with `cargo test` (44) and `native.py check` on Nightly `6560641`.
+
 ## 0.2.0 — Overlay and bookmarks
 
 The overlay JEI is known for, on Horizon's screen hooks. It needs hook points

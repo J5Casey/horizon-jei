@@ -4,7 +4,7 @@
 use crate::game::Game;
 use crate::game::jei::{
     self, Bookmarks, Config, Context, Counts, Event, Ingredient, Item, Kind, Layout, Out, Recipe,
-    Sort, Stack, Toggle, View, Viewer,
+    Session, Sort, Stack, Toggle, View, Viewer,
 };
 use crate::game::native_hooks::{
     NativePanelEvent, NativeRecipeKind, NativeRecipeLayout, NativeRecipeStack, NativeRecipeView,
@@ -22,7 +22,7 @@ const SHIFT: u32 = 1;
 
 /// The viewer while a world is open, and what the overlay keeps.
 struct State {
-    viewer: Option<Viewer>,
+    session: Session,
     bookmarks: Bookmarks,
     config: Config,
     /// The config and the bookmarks have been read from disk.
@@ -44,13 +44,21 @@ struct Drag {
 impl State {
     fn new() -> Self {
         Self {
-            viewer: None,
+            session: Session::new(),
             bookmarks: Bookmarks::default(),
             config: Config::default(),
             loaded: false,
             pending: Vec::new(),
             drag: None,
         }
+    }
+
+    fn viewer(&self) -> Option<&Viewer> {
+        self.session.viewer()
+    }
+
+    fn viewer_mut(&mut self) -> Option<&mut Viewer> {
+        self.session.viewer_mut()
     }
 }
 
@@ -140,19 +148,18 @@ fn lang(game: &Game<'_>) -> jei::Lang {
 
 /// Builds the viewer once per world and shows the item list in the panel.
 pub(super) fn sync(game: &mut Game<'_>) {
-    if !game.native_on(jei::ID) {
-        return;
-    }
-    if game.native_player().is_none() {
-        STATE.with(|s| {
-            let mut state = s.borrow_mut();
-            state.viewer = None;
+    let has_player = game.native_player().is_some();
+    let enabled = game.native_on(jei::ID);
+    let needs_build = STATE.with(|s| {
+        let mut state = s.borrow_mut();
+        let needs_build = state.session.update(has_player, enabled);
+        if !has_player {
             state.drag = None;
             state.pending.clear();
-        });
-        return;
-    }
-    if STATE.with(|s| s.borrow().viewer.is_some()) {
+        }
+        needs_build
+    });
+    if !needs_build {
         return;
     }
     let Some(catalog) = game.native_recipes() else {
@@ -166,7 +173,7 @@ pub(super) fn sync(game: &mut Game<'_>) {
     if sort != viewer.sort() {
         out = viewer.set_sort(sort);
     }
-    STATE.with(|s| s.borrow_mut().viewer = Some(viewer));
+    STATE.with(|s| s.borrow_mut().session.set_viewer(viewer));
     if let Err(error) = apply(game, out) {
         game.native_chat(&format!("JEI: {error}"));
     }
@@ -216,7 +223,7 @@ fn bookmark(game: &mut Game<'_>, stack: Stack) {
         result
     });
     let name = STATE
-        .with(|s| s.borrow().viewer.as_ref().map(|v| v.item_name(&stack.item)))
+        .with(|s| s.borrow().viewer().map(|v| v.item_name(&stack.item)))
         .unwrap_or_else(|| stack.item.clone());
     let text = match result {
         Toggle::Added(_) => format!("{}: {name}", lang.bookmark_added()),
@@ -274,7 +281,7 @@ pub(super) fn screen_render_post(
     };
     let slot = &bookmarks.slots()[index];
     let name = STATE
-        .with(|s| s.borrow().viewer.as_ref().map(|v| v.item_name(&slot.item)))
+        .with(|s| s.borrow().viewer().map(|v| v.item_name(&slot.item)))
         .unwrap_or_else(|| slot.item.clone());
     draw_tooltip(
         game,
@@ -444,7 +451,7 @@ pub(super) fn tooltip(
     let config = STATE.with(|s| s.borrow().config);
     let counts = STATE.with(|s| {
         let state = s.borrow();
-        state.viewer.as_ref().map_or(Counts::default(), |viewer| {
+        state.viewer().map_or(Counts::default(), |viewer| {
             viewer.counts(&stack.item, &components)
         })
     });
@@ -490,7 +497,7 @@ pub(super) fn set_sort(game: &mut Game<'_>, sort: Sort) {
     let mut config = config();
     config.sort = sort;
     store_config(config);
-    let out = STATE.with(|s| s.borrow_mut().viewer.as_mut().map(|v| v.set_sort(sort)));
+    let out = STATE.with(|s| s.borrow_mut().viewer_mut().map(|v| v.set_sort(sort)));
     if let Some(out) = out {
         if let Err(error) = apply(game, out) {
             game.native_chat(&format!("JEI: {error}"));
@@ -567,7 +574,7 @@ fn dispatch(game: &mut Game<'_>, event: Event) {
 fn handle(event: &Event, ctx: &Context<'_>, lang: jei::Lang) -> Vec<Out> {
     STATE.with(|s| {
         let mut state = s.borrow_mut();
-        let Some(viewer) = state.viewer.as_mut() else {
+        let Some(viewer) = state.viewer_mut() else {
             return Vec::new();
         };
         viewer.set_lang(lang);
@@ -579,8 +586,7 @@ fn handle(event: &Event, ctx: &Context<'_>, lang: jei::Lang) -> Vec<Out> {
 pub(super) fn counts() -> Option<(usize, usize)> {
     STATE.with(|s| {
         s.borrow()
-            .viewer
-            .as_ref()
+            .viewer()
             .map(|viewer| (viewer.item_count(), viewer.recipe_count()))
     })
 }

@@ -1,22 +1,22 @@
 # Publishing a release
 
 What the registry needs (docs: <https://playhorizon.dev/docs/publish-a-mod>), and what is already
-done for 0.2.0. An update is the same submit form with a new version: it adds a `[[versions]]` to
+done for 0.2.1. An update is the same submit form with a new version: it adds a `[[versions]]` to
 `mods/jei.toml`, the entry 0.1.0 created.
 
-## Done for 0.2.0
+## Done for 0.2.1
 
 | Step | State |
 |---|---|
-| Version in `horizon-mixin.toml` | `0.2.0` |
-| Package | `jei-0.2.0.hnmod`, 29,815 bytes, SHA-256 `87011011463d326199cf025b71e8de523c36a4ecfc76bd73d9a67778f2c6c843` |
-| Reproducible | `native.py package` run twice on the committed tree (the 0.2.0 commit) gives those exact bytes |
+| Version in `horizon-mixin.toml` | `0.2.1` |
+| Package | `jei-0.2.1.hnmod`, 31,495 bytes, SHA-256 `d0a840069ff9fb877021829584df72441928a9283feb27df30d244837bc7f2af` |
+| Reproducible | `native.py package` run twice on the committed tree gives those exact bytes |
 | `cargo horizon-mod check` | passes: `native-mod, format native-1/6560641/ e8cd0aa, for 26.3`, signature verified |
 | Checked against the Nightly players have | `native.py check --horizon latest` passes; on 07 Nov 2026 `latest` was the pinned `6560641` |
 | Hook points | needs version 313 or later (`compatibility.json`, `hooks`); 0.1.0 needed 2 |
 | Licence | MIT (`LICENSE`, `NOTICE` with JEI's copyright) |
 | Signing key | minisign, id `FC3386F1F51ECF6A`; the public half is `horizon-jei.pub`, the private half lives outside the repository (`~/.config/horizon-jei/` and a copy in the owner's Windows profile) and is password protected |
-| Signature | `jei-0.2.0.hnmod.minisig`, trusted comment `jei 0.2.0 for Horizon 26.3` |
+| Signature | `jei-0.2.1.hnmod.minisig`, trusted comment `jei 0.2.1 for Horizon 26.3` |
 
 ## Submit
 
@@ -25,20 +25,20 @@ Open <https://playhorizon.dev/mods/submit>, sign in with GitHub, and fill in exa
 | Field | Value |
 |---|---|
 | Kind | Native mod |
-| File | `dist/jei-0.2.0.hnmod` |
+| File | `dist/jei-0.2.1.hnmod` |
 | Id | `jei` |
-| Version | `0.2.0` |
+| Version | `0.2.1` |
 | For Minecraft | `26.3` |
-| What changed | the "What changed" section of [`docs/submission-0.2.0.md`](submission-0.2.0.md) |
+| What changed | the "What changed" section of [`docs/submission-0.2.1.md`](submission-0.2.1.md) |
 | Name | `JEI for Horizon` |
 | Summary | `An item and recipe viewer for Horizon: every item beside container screens, with search, recipes, uses, tooltips and bookmarks` |
-| Description | the description of [`docs/submission-0.2.0.md`](submission-0.2.0.md) |
+| Description | the description of [`docs/submission-0.2.1.md`](submission-0.2.1.md) |
 | Authors | `enderliker` |
 | Licence | `MIT` |
 | Source code | `https://github.com/enderliker/horizon-jei` |
 | Icon | none yet (optional; a square `https://` PNG, at most 256 KiB) |
 | Public key | `RWRqzx718YYz/OHRM+pAnFWlDv8Rrgar5C4NszQg3EKJWQZWNel5Sslf` |
-| Signature | the text of `dist/jei-0.2.0.hnmod.minisig` |
+| Signature | the text of `dist/jei-0.2.1.hnmod.minisig` |
 
 "Submit for review" opens a pull request in `horizon-rust/horizon-mods`; a maintainer reads every line
 of the bundle (native mods are compiled into the player's game) and answers there. Every version of a
@@ -49,11 +49,11 @@ native mod is read again, even an update of the same project.
 ```sh
 python3 /home/ender/horizon-tools/horizon-mods/native/tools/native.py check "$PWD" --horizon latest
 python3 /home/ender/horizon-tools/horizon-mods/native/tools/native.py package "$PWD"
-cp /home/ender/horizon-tools/horizon-mods/native/target/jei-0.2.0.hnmod dist/
+cp /home/ender/horizon-tools/horizon-mods/native/target/jei-0.2.1.hnmod dist/
 minisign -S -s ~/.config/horizon-jei/horizon-jei.key \
-  -m dist/jei-0.2.0.hnmod -t "jei 0.2.0 for Horizon 26.3"
-cargo horizon-mod check dist/jei-0.2.0.hnmod \
-  --key "$(sed -n 2p horizon-jei.pub)" --signature dist/jei-0.2.0.hnmod.minisig
+  -m dist/jei-0.2.1.hnmod -t "jei 0.2.1 for Horizon 26.3"
+cargo horizon-mod check dist/jei-0.2.1.hnmod \
+  --key "$(sed -n 2p horizon-jei.pub)" --signature dist/jei-0.2.1.hnmod.minisig
 ```
 
 `minisign` asks for the key's password on the terminal. The signature covers the exact bytes: if

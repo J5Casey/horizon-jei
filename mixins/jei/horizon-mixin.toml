@@ -1,6 +1,6 @@
 [mod]
 id = "jei"
-version = "0.2.0"
+version = "0.2.1"
 priority = 100
 
 # The commit this bundle was tested on (Nightly 2026-11-07). It hooks only the

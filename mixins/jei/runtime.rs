@@ -9,7 +9,7 @@
 /// The mod's id: its row, its settings folder and its keys.
 pub const ID: &str = "jei";
 pub const NAME: &str = "JEI";
-pub const VERSION: &str = "0.2.0";
+pub const VERSION: &str = "0.2.1";
 pub const DESCRIPTION: &str = "An item and recipe viewer: every item beside container screens, with search, recipes, uses and bookmarks.";
 
 /// The hook points' version this build needs: the newest point it hooks
@@ -1548,11 +1548,55 @@ impl Viewer {
     }
 }
 
+/// The viewer across world changes and the enabled switch in Options > Mods.
+#[derive(Default)]
+pub struct Session {
+    viewer: Option<Viewer>,
+}
+
+impl Session {
+    pub fn new() -> Self {
+        Self { viewer: None }
+    }
+
+    pub fn viewer(&self) -> Option<&Viewer> {
+        self.viewer.as_ref()
+    }
+
+    pub fn viewer_mut(&mut self) -> Option<&mut Viewer> {
+        self.viewer.as_mut()
+    }
+
+    pub fn set_viewer(&mut self, viewer: Viewer) {
+        self.viewer = Some(viewer);
+    }
+
+    pub fn clear(&mut self) {
+        self.viewer = None;
+    }
+
+    /// Synchronizes the session on a frame:
+    /// - Outside a world (`has_player` is false), the cached viewer is cleared
+    ///   even while the mod is disabled in Options > Mods.
+    /// - When the mod is disabled, returns false without building.
+    /// - When enabled in a world, returns true if a viewer needs to be built.
+    pub fn update(&mut self, has_player: bool, enabled: bool) -> bool {
+        if !has_player {
+            self.clear();
+            return false;
+        }
+        if !enabled {
+            return false;
+        }
+        self.viewer.is_none()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn title_has_name_and_version() {
-        assert_eq!(super::title(), "JEI 0.2.0");
+        assert_eq!(super::title(), "JEI 0.2.1");
     }
 
     #[test]
@@ -2441,5 +2485,74 @@ mod tests {
         assert_eq!(super::harvest_variants(&recipes, 10, 4).len(), 4);
         // No components, no variants.
         assert!(super::harvest_variants(&[], 8, 100).is_empty());
+    }
+
+    #[test]
+    fn session_clears_viewer_across_world_switch_while_disabled() {
+        let mut session = super::Session::new();
+        let (items_a, recipes_a) = tables();
+        let (viewer_a, _) = viewer(items_a, recipes_a, super::Lang::En);
+
+        // 1. Open world A with JEI enabled: builds and caches viewer A.
+        assert!(session.update(true, true));
+        session.set_viewer(viewer_a);
+        assert!(session.viewer().is_some());
+        assert_eq!(
+            session
+                .viewer()
+                .unwrap()
+                .counts("minecraft:diamond", "")
+                .recipes,
+            3
+        );
+
+        // 2. Disable JEI while in world A: stays cached for world A.
+        assert!(!session.update(true, false));
+        assert!(session.viewer().is_some());
+
+        // Re-enabling in the same world A without leaving does not rebuild.
+        assert!(!session.update(true, true));
+        assert!(session.viewer().is_some());
+
+        // Disable again before leaving.
+        assert!(!session.update(true, false));
+
+        // 3. Leave world A (unload world) while JEI is disabled: MUST clear viewer.
+        assert!(!session.update(false, false));
+        assert!(
+            session.viewer().is_none(),
+            "viewer must be cleared on world unload even while disabled"
+        );
+
+        // 4. Join world B while JEI is still disabled: remains cleared.
+        assert!(!session.update(true, false));
+        assert!(session.viewer().is_none());
+
+        // 5. Re-enable JEI in world B: must signal rebuild for world B.
+        assert!(
+            session.update(true, true),
+            "re-enabling in world B must request a new viewer build"
+        );
+
+        // World B's catalog has emerald instead of diamond.
+        let items_b = vec![item("minecraft:emerald", "Emerald")];
+        let (viewer_b, _) =
+            super::Viewer::with_variants(items_b, Vec::new(), Vec::new(), super::Lang::En);
+        session.set_viewer(viewer_b);
+
+        // Viewer now holds World B's items and recipes, not World A's.
+        assert_eq!(session.viewer().unwrap().item_count(), 1);
+        assert_eq!(
+            session.viewer().unwrap().item_name("minecraft:emerald"),
+            "Emerald"
+        );
+        assert_eq!(
+            session
+                .viewer()
+                .unwrap()
+                .counts("minecraft:diamond", "")
+                .recipes,
+            0
+        );
     }
 }
