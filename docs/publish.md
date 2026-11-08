@@ -12,7 +12,7 @@ done for 0.2.1. An update is the same submit form with a new version: it adds a 
 | Package | `jei-0.2.1.hnmod`, 31,495 bytes, SHA-256 `d0a840069ff9fb877021829584df72441928a9283feb27df30d244837bc7f2af` |
 | Reproducible | `native.py package` run twice on the committed tree gives those exact bytes |
 | `cargo horizon-mod check` | passes: `native-mod, format native-1/6560641/ e8cd0aa, for 26.3`, signature verified |
-| Checked against the Nightly players have | `native.py check --horizon latest` passes; on 07 Nov 2026 `latest` was the pinned `6560641` |
+| Checked against the Nightly players have | `native.py check --horizon latest` passes (tested on `fdc87ae` and pinned `6560641`) |
 | Hook points | needs version 313 or later (`compatibility.json`, `hooks`); 0.1.0 needed 2 |
 | Licence | MIT (`LICENSE`, `NOTICE` with JEI's copyright) |
 | Signing key | minisign, id `FC3386F1F51ECF6A`; the public half is `horizon-jei.pub`, the private half lives outside the repository (`~/.config/horizon-jei/` and a copy in the owner's Windows profile) and is password protected |

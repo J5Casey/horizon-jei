@@ -60,10 +60,7 @@ Clicking a container slot (R and U only), the creative inventory panel, the non-
 
 ### What it needs
 
-Horizon 26.3 with hook points version 313 or later (the Nightly of 2026-11-07, `6560641`, is the one it
-was tested on). Native mods are compiled into the game and are **not sandboxed**: build only source you
-trust. It reads the game's items and recipes, the panel, chat and tooltips, and writes only its own
-folder, `config/jei/` (`jei.cfg` for the options, `bookmarks.txt` for the bar). No network.
+Horizon 26.3 with hook points version 313 or later (tested and verified on Horizon Nightly `6560641` and `fdc87ae`). Native mods are compiled into the game and are **not sandboxed**: build only source you trust. It reads the game's items and recipes, the panel, chat and tooltips, and writes only its own folder, `config/jei/` (`jei.cfg` for the options, `bookmarks.txt` for the bar). No network.
 
 ### Install
 
