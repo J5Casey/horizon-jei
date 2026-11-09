@@ -692,7 +692,7 @@ pub struct Category {
     pub recipes: Vec<ChanceRecipe>,
 }
 
-/// A chance as JEI words it: one decimal, "<0.1%" below that, "100%".
+/// A chance to one decimal ("20.0%"), "<0.1%" below that, "100%".
 pub fn percent(chance: f32) -> String {
     let p = chance * 100.0;
     if p >= 99.95 {
@@ -700,9 +700,32 @@ pub fn percent(chance: f32) -> String {
     } else if p < 0.05 {
         "<0.1%".to_owned()
     } else {
-        let text = format!("{p:.1}");
-        format!("{}%", text.strip_suffix(".0").unwrap_or(&text))
+        format!("{p:.1}%")
     }
+}
+
+/// `text` broken into lines no wider than `max` (by `width`), at spaces; a
+/// word wider than `max` keeps a line of its own.
+pub fn wrap(text: &str, max: f32, width: impl Fn(&str) -> f32) -> Vec<String> {
+    let mut lines = Vec::new();
+    for paragraph in text.split('\n') {
+        let mut line = String::new();
+        for word in paragraph.split(' ').filter(|w| !w.is_empty()) {
+            let joined = if line.is_empty() {
+                word.to_owned()
+            } else {
+                format!("{line} {word}")
+            };
+            if !line.is_empty() && width(&joined) > max {
+                lines.push(std::mem::take(&mut line));
+                line = word.to_owned();
+            } else {
+                line = joined;
+            }
+        }
+        lines.push(line);
+    }
+    lines
 }
 
 /// A count range: "" for exactly one, "x3", "x1-4".
@@ -2768,11 +2791,17 @@ mod tests {
     #[test]
     fn percents_and_counts() {
         assert_eq!(super::percent(0.125), "12.5%");
-        assert_eq!(super::percent(0.2), "20%");
+        assert_eq!(super::percent(0.2), "20.0%");
         assert_eq!(super::percent(1.0), "100%");
         assert_eq!(super::percent(0.0004), "<0.1%");
         assert_eq!(super::percent(0.0006), "0.1%");
         assert_eq!(super::count_range(1, 1), "");
+        let w = |t: &str| t.chars().count() as f32;
+        assert_eq!(
+            super::wrap("Cast any fishing rod off the edge", 12.0, w),
+            ["Cast any", "fishing rod", "off the edge"]
+        );
+        assert_eq!(super::wrap("a\nbb cc", 5.0, w), ["a", "bb cc"]);
         assert_eq!(super::count_range(3, 3), "x3");
         assert_eq!(super::count_range(2, 4), "x2-4");
     }
