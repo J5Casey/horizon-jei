@@ -779,7 +779,8 @@ fn apply(game: &mut Game<'_>, out: Out) -> Result<(), String> {
             let mut views = views;
             for view in &mut views {
                 if !view.note.is_empty() {
-                    view.note = jei::wrap(&view.note, 168.0, |t| game.native_text_width(t)).join("\n");
+                    view.note =
+                        jei::wrap(&view.note, 168.0, |t| game.native_text_width(t)).join("\n");
                 }
             }
             STATE.with(|s| {
@@ -1149,8 +1150,16 @@ fn nine(
     };
     let [x, y, w, h] = r;
     let b = border.min(w / 2.0).min(h / 2.0);
-    let cols = [(0.0, b, x, b), (b, sw - 2.0 * b, x + b, w - 2.0 * b), (sw - b, b, x + w - b, b)];
-    let rows = [(0.0, b, y, b), (b, sh - 2.0 * b, y + b, h - 2.0 * b), (sh - b, b, y + h - b, b)];
+    let cols = [
+        (0.0, b, x, b),
+        (b, sw - 2.0 * b, x + b, w - 2.0 * b),
+        (sw - b, b, x + w - b, b),
+    ];
+    let rows = [
+        (0.0, b, y, b),
+        (b, sh - 2.0 * b, y + b, h - 2.0 * b),
+        (sh - b, b, y + h - b, b),
+    ];
     for (sx, sw_, dx, dw) in cols {
         for (sy, sh_, dy, dh) in rows {
             if dw > 0.0 && dh > 0.0 {
@@ -1162,19 +1171,35 @@ fn nine(
 }
 
 /// Icon `name` of [`SPRITES`] at its own size, centred in `r`.
-fn icon(game: &Game<'_>, batch: &mut horizon_client::hud::HudBatch, name: &str, r: [f32; 4]) -> bool {
+fn icon(
+    game: &Game<'_>,
+    batch: &mut horizon_client::hud::HudBatch,
+    name: &str,
+    r: [f32; 4],
+) -> bool {
     let name = format!("{SPRITES}icons/{name}");
     let Some([w, h]) = game.native_sprite_size(&name) else {
         return false;
     };
-    let at = [(r[0] + (r[2] - w) / 2.0).floor(), (r[1] + (r[3] - h) / 2.0).floor(), w, h];
+    let at = [
+        (r[0] + (r[2] - w) / 2.0).floor(),
+        (r[1] + (r[3] - h) / 2.0).floor(),
+        w,
+        h,
+    ];
     game.native_sprite(batch, &name, [0.0, 0.0, w, h], at)
 }
 
 /// The recipe window: JEI's beveled grey panel.
 fn frame_box(game: &Game<'_>, batch: &mut horizon_client::hud::HudBatch, r: [f32; 4]) {
     let [x, y, w, h] = r;
-    if nine(game, batch, "gui_background", [x - 1.0, y - 1.0, w + 2.0, h + 2.0], 4.0) {
+    if nine(
+        game,
+        batch,
+        "gui_background",
+        [x - 1.0, y - 1.0, w + 2.0, h + 2.0],
+        4.0,
+    ) {
         return;
     }
     game.native_fill(batch, [x - 1.0, y - 1.0, w + 2.0, h + 2.0], OUTLINE);
@@ -1304,29 +1329,38 @@ fn draw_overlay(
     let hit = overlay_hit(overlay, gui, mouse);
     // Tabs, as JEI's: the others behind the window, the selected one over
     // its edge, joined to it.
-    let tab = |game: &Game<'_>, batch: &mut horizon_client::hud::HudBatch, i: usize, rect: [f32; 4]| {
-        let selected = i == overlay.tab;
-        let r = if selected {
-            [rect[0], rect[1], rect[2] - 1.0, rect[3] + 3.0]
-        } else {
-            [rect[0], rect[1] + 2.0, rect[2] - 1.0, rect[3] - 2.0]
+    let tab =
+        |game: &Game<'_>, batch: &mut horizon_client::hud::HudBatch, i: usize, rect: [f32; 4]| {
+            let selected = i == overlay.tab;
+            let r = if selected {
+                [rect[0], rect[1], rect[2] - 1.0, rect[3] + 3.0]
+            } else {
+                [rect[0], rect[1] + 2.0, rect[2] - 1.0, rect[3] - 2.0]
+            };
+            let sprite = if selected {
+                "tab_selected"
+            } else {
+                "tab_unselected"
+            };
+            if nine(game, batch, sprite, r, 4.0) {
+                if selected {
+                    game.native_fill(
+                        batch,
+                        [r[0] + 3.0, r[1] + r[3] - 5.0, r[2] - 6.0, 5.0],
+                        PANEL_BG,
+                    );
+                }
+            } else {
+                frame_box(game, batch, r);
+                if !selected {
+                    game.native_fill(batch, r, 0x30_00_00_00);
+                }
+            }
+            if let Some(icon) = overlay.tabs.get(i) {
+                let top = if selected { r[1] + 3.0 } else { r[1] + 2.0 };
+                draw_stack(game, batch, icon, [r[0] + 3.0, top, 18.0, 18.0]);
+            }
         };
-        let sprite = if selected { "tab_selected" } else { "tab_unselected" };
-        if nine(game, batch, sprite, r, 4.0) {
-            if selected {
-                game.native_fill(batch, [r[0] + 3.0, r[1] + r[3] - 5.0, r[2] - 6.0, 5.0], PANEL_BG);
-            }
-        } else {
-            frame_box(game, batch, r);
-            if !selected {
-                game.native_fill(batch, r, 0x30_00_00_00);
-            }
-        }
-        if let Some(icon) = overlay.tabs.get(i) {
-            let top = if selected { r[1] + 3.0 } else { r[1] + 2.0 };
-            draw_stack(game, batch, icon, [r[0] + 3.0, top, 18.0, 18.0]);
-        }
-    };
     for (i, rect) in g.tabs.iter().filter(|(i, _)| *i != overlay.tab) {
         tab(game, batch, *i, *rect);
     }
@@ -1336,7 +1370,13 @@ fn draw_overlay(
     }
     if !g.catalysts.is_empty() {
         let [x, y, w, h] = g.catalyst_panel;
-        if !nine(game, batch, "catalyst_tab", [x - 1.0, y - 1.0, w + 2.0, h + 2.0], 4.0) {
+        if !nine(
+            game,
+            batch,
+            "catalyst_tab",
+            [x - 1.0, y - 1.0, w + 2.0, h + 2.0],
+            4.0,
+        ) {
             frame_box(game, batch, g.catalyst_panel);
         }
         for (stack, rect) in overlay.catalysts.iter().zip(&g.catalysts) {

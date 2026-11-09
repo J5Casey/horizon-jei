@@ -1221,16 +1221,6 @@ impl Bar {
         self.columns * self.rows
     }
 
-    /// The whole bar.
-    pub fn rect(&self) -> [f32; 4] {
-        [
-            self.origin[0],
-            self.origin[1],
-            self.columns as f32 * BOOKMARK_SLOT,
-            self.rows as f32 * BOOKMARK_SLOT,
-        ]
-    }
-
     /// Slot `index`'s place: column by column, from the top.
     pub fn slot(&self, index: usize) -> [f32; 4] {
         let column = index % self.columns;
@@ -3367,7 +3357,6 @@ mod tests {
         assert_eq!(bar.hit([23.0, 5.0], 1), None);
         assert_eq!(bar.hit([3.0, 5.0], 3), None);
         assert_eq!(bar.hit([5.0, 23.0], 0), None);
-        assert_eq!(bar.rect(), [4.0, 4.0, 36.0, 216.0]);
         assert_eq!(super::bookmark_bar(240.0).capacity(), 24);
     }
 
