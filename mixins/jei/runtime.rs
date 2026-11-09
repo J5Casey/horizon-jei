@@ -1647,7 +1647,11 @@ impl Viewer {
     /// A station's catalysts: its vanilla blocks, and for the crafting tab
     /// the mods' crafting blocks.
     fn catalysts(&self, station: Station) -> Vec<String> {
-        let mut out: Vec<String> = station.catalysts().iter().map(|c| (*c).to_owned()).collect();
+        let mut out: Vec<String> = station
+            .catalysts()
+            .iter()
+            .map(|c| (*c).to_owned())
+            .collect();
         if station == Station::Crafting {
             out.extend(self.crafters.iter().cloned());
         }
@@ -1694,6 +1698,9 @@ impl Viewer {
 
     /// The mods' categories (`native_recipe_categories`): their tabs join the
     /// stations', and the tooltips count their recipes.
+    // For the Horizon hook mods will declare categories through; until it
+    // exists only the tests call this.
+    #[allow(dead_code)]
     pub fn set_categories(&mut self, categories: Vec<Category>) {
         self.counts = count_recipes(&self.recipes);
         for category in &categories {

@@ -780,7 +780,8 @@ fn apply(game: &mut Game<'_>, out: Out) -> Result<(), String> {
             let mut views = views;
             for view in &mut views {
                 if !view.note.is_empty() {
-                    view.note = jei::wrap(&view.note, 180.0, |t| game.native_text_width(t)).join("\n");
+                    view.note =
+                        jei::wrap(&view.note, 180.0, |t| game.native_text_width(t)).join("\n");
                 }
             }
             STATE.with(|s| {
