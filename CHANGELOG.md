@@ -14,6 +14,12 @@ before the PR merged):
   `native_recipe_categories_version` moves: Void Fishing's loot pages and the
   like show as tabs with chances.
 
+Checked on main `a3bf653` with Braid's mod set (2026-11-09): R and U over a stack, "+" and Shift "+" in the
+crafting table and a Crafting Station, and the Chisel tab. Two quirks show the same on braid/dev6, so they
+are older than the move: in a crafting table the stick's "+" shows the planks across the top row (the
+server places them right and the stick crafts), and the Copper-Reel Rod's "+" (a shapeless 2x2 whose result
+has components) moves nothing.
+
 
 ## Unreleased: the recipe screen, and a "+" that needs no unlock
 
