@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.2-braid.1: Braid's build on J5Casey/horizon braid/dev4
+
+The unreleased recipe screen and "+" below, plus Horizon's recipe viewer API
+(not upstream yet, so this build pins braid/dev4 `860cc54`):
+
+- **Other mods' lookups.** `native_recipe_lookup`: a quest book's item asks
+  for its recipes (click), its uses (right click) or a key over it (R, U, and A
+  bookmarks it); the recipe screen opens as from JEI's list.
+- **Mods' categories.** `native_collect_recipe_categories`, asked again when
+  `native_recipe_categories_version` moves: Void Fishing's loot pages and the
+  like show as tabs with chances.
+
+
 ## Unreleased: the recipe screen, and a "+" that needs no unlock
 
 - **"+" works with no recipe-book unlock.** It moves a recipe in through

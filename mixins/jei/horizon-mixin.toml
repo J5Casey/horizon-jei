@@ -1,13 +1,14 @@
 [mod]
 id = "jei"
-version = "0.2.1"
+version = "0.2.2-braid.1"
 priority = 100
 
-# The commit this bundle was tested on (Nightly 2026-11-07). It hooks only the
-# native hook points, so the launcher builds it on any Horizon whose hook
-# points are version 411 or later (compatibility.json, "hooks").
+# Braid's build: it pins J5Casey/horizon braid/dev4, whose recipe viewer API
+# (recipe_lookup, recipe categories) is not merged upstream yet. Upstream JEI
+# names hook points 411 instead (compatibility.json "hooks") and builds on any
+# Horizon at least that new.
 [compatibility]
-horizon_revision = "6560641ba51a452f6bc2407baa4eb1b3be517ca8"
+horizon_revision = "860cc54d0f358dbfedec06773be7c49b90fff4d0"
 
 # runtime.rs becomes the module crate::game::jei.
 [[module]]
@@ -218,4 +219,20 @@ helper = "screen_closing.rs"
 bindings = [
   { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
   { name = "screen", ty = "&crate::game::native_hooks::NativeScreenView<'_>", value = "screen" },
+]
+
+# Horizon's recipe viewer API (braid/dev4 until it merges upstream): another
+# mod's screen asks for a stack's recipes, uses or a key (the quest book), and
+# mods declare categories of their own (void fishing, sieves).
+
+[[injection]]
+id = "lookup"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_recipe_lookup"
+helper = "lookup.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "stack", ty = "&crate::game::native_hooks::NativeStack", value = "stack" },
+  { name = "lookup", ty = "&crate::game::native_hooks::NativeRecipeLookup", value = "lookup" },
+  { name = "handled", ty = "&mut bool", value = "&mut *handled" },
 ]

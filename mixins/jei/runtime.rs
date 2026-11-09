@@ -9,7 +9,7 @@
 /// The mod's id: its row, its settings folder and its keys.
 pub const ID: &str = "jei";
 pub const NAME: &str = "JEI";
-pub const VERSION: &str = "0.2.1";
+pub const VERSION: &str = "0.2.2-braid.1";
 pub const DESCRIPTION: &str = "An item and recipe viewer: every item beside container screens, with search, recipes, uses and bookmarks.";
 
 /// The hook points' version this build needs: the newest point it hooks
@@ -1624,7 +1624,11 @@ impl Viewer {
     /// A station's catalysts: its vanilla blocks, and for the crafting tab
     /// the mods' crafting blocks.
     fn catalysts(&self, station: Station) -> Vec<String> {
-        let mut out: Vec<String> = station.catalysts().iter().map(|c| (*c).to_owned()).collect();
+        let mut out: Vec<String> = station
+            .catalysts()
+            .iter()
+            .map(|c| (*c).to_owned())
+            .collect();
         if station == Station::Crafting {
             out.extend(self.crafters.iter().cloned());
         }
@@ -2162,7 +2166,7 @@ impl Session {
 mod tests {
     #[test]
     fn title_has_name_and_version() {
-        assert_eq!(super::title(), "JEI 0.2.1");
+        assert_eq!(super::title(), "JEI 0.2.2-braid.1");
     }
 
     #[test]

@@ -47,6 +47,9 @@ struct State {
     gui: [f32; 2],
     /// Stacks the overlay's keys bookmark at the next frame.
     to_bookmark: Vec<Stack>,
+    /// The mods' categories' version the viewer was given
+    /// (`native_recipe_categories_version`).
+    categories: Option<u64>,
 }
 
 /// The recipe screen: the viewer's page, the page of it shown, and whether
@@ -87,6 +90,7 @@ impl State {
             overlay_pressed: false,
             gui: [0.0, 0.0],
             to_bookmark: Vec::new(),
+            categories: None,
         }
     }
 
@@ -204,6 +208,7 @@ pub(super) fn sync(game: &mut Game<'_>) {
         needs_build
     });
     if !needs_build {
+        refresh_categories(game);
         return;
     }
     let Some(catalog) = game.native_recipes() else {
@@ -226,7 +231,12 @@ pub(super) fn sync(game: &mut Game<'_>) {
             .map(|t| t.id.to_owned())
             .collect(),
     );
-    STATE.with(|s| s.borrow_mut().session.set_viewer(viewer));
+    STATE.with(|s| {
+        let mut state = s.borrow_mut();
+        state.session.set_viewer(viewer);
+        state.categories = None;
+    });
+    refresh_categories(game);
     if let Err(error) = apply(game, out) {
         game.native_chat(&format!("JEI: {error}"));
     }
@@ -1600,4 +1610,91 @@ pub(super) fn toggle_docked(game: &mut Game<'_>) -> Config {
     close_overlay(game);
     dispatch(game, Event::Close);
     config
+}
+
+// ---------------------------------------------------------------- Horizon's recipe viewer API
+
+/// The mods' categories (`native_collect_recipe_categories`), asked again
+/// whenever their version moves (a mod's server data arrived).
+fn refresh_categories(game: &mut Game<'_>) {
+    let version = game.native_recipe_categories_version();
+    let current = STATE.with(|s| {
+        let state = s.borrow();
+        state.viewer().is_none() || state.categories == Some(version)
+    });
+    if current {
+        return;
+    }
+    let categories: Vec<jei::Category> = game
+        .native_collect_recipe_categories()
+        .into_iter()
+        .map(|c| jei::Category {
+            id: c.id,
+            title: c.title,
+            subtitle: c.subtitle,
+            icon: stack_of(&c.icon),
+            catalysts: c.catalysts.iter().map(stack_of).collect(),
+            recipes: c
+                .recipes
+                .into_iter()
+                .map(|r| jei::ChanceRecipe {
+                    inputs: (r.inputs.iter())
+                        .map(|slot| slot.iter().map(stack_of).collect())
+                        .collect(),
+                    outputs: (r.outputs.iter())
+                        .map(|o| jei::Chance {
+                            stack: stack_of(&o.stack),
+                            chance: o.chance,
+                            min: o.min,
+                            max: o.max,
+                            notes: o.notes.clone(),
+                        })
+                        .collect(),
+                    notes: r.notes,
+                })
+                .collect(),
+        })
+        .collect();
+    STATE.with(|s| {
+        let mut state = s.borrow_mut();
+        state.categories = Some(version);
+        if let Some(viewer) = state.viewer_mut() {
+            viewer.set_categories(categories);
+        }
+    });
+}
+
+/// Another mod's lookup (`native_recipe_lookup`): recipes, uses, or a key
+/// over its stack, which does what it does over JEI's list (R, U, A).
+pub(super) fn lookup(
+    game: &mut Game<'_>,
+    stack: &NativeStack,
+    lookup: &crate::game::native_hooks::NativeRecipeLookup,
+    handled: &mut bool,
+) {
+    use crate::game::native_hooks::NativeRecipeLookup as L;
+    if !game.native_on(jei::ID) || STATE.with(|s| s.borrow().viewer().is_none()) {
+        return;
+    }
+    let stack = stack_of(stack);
+    match lookup {
+        L::Recipes => dispatch(game, Event::Open { stack, uses: false }),
+        L::Uses => dispatch(game, Event::Open { stack, uses: true }),
+        L::Key(key) => {
+            let mark = game.native_mod_key(jei::ID, "bookmark", jei::BOOKMARK_KEY);
+            if *key == mark {
+                bookmark(game, stack);
+            } else {
+                dispatch(
+                    game,
+                    Event::Key {
+                        key: key.clone(),
+                        stack,
+                    },
+                );
+            }
+        }
+        _ => return,
+    }
+    *handled = true;
 }
