@@ -15,10 +15,16 @@ before the PR merged):
   like show as tabs with chances.
 
 Checked on main `a3bf653` with Braid's mod set (2026-11-09): R and U over a stack, "+" and Shift "+" in the
-crafting table and a Crafting Station, and the Chisel tab. Two quirks show the same on braid/dev6, so they
-are older than the move: in a crafting table the stick's "+" shows the planks across the top row (the
-server places them right and the stick crafts), and the Copper-Reel Rod's "+" (a shapeless 2x2 whose result
-has components) moves nothing.
+crafting table and a Crafting Station, and the Chisel tab. Two quirks seen then, both outside JEI:
+
+- The stick's planks across the top row of a crafting table came from the check, not the game: `horizon-ctl
+  use` opens the table on the client only, so its 3x3 face showed the server's 2x2 inventory grid. A table
+  opened as a player opens it (`interact`) gets the stick's "+" in the middle column, as vanilla.
+- The Copper-Reel Rod was missing from the list, so the "+" clicked was another recipe's. Horizon numbered
+  the recipe book from the client's own files while the server counts the world's data pack recipes (the
+  `braid` pack), and the server's book entries then replaced other recipes; the pack's own recipes had no
+  "+". Fixed in Horizon (issue horizon-rust/horizon#14435, PR #14437); checked in game on main `a3bf653` with that fix: the
+  Copper-Reel Rod and Twine Rod "+" fill the inventory's grid and a crafting table and both craft.
 
 
 ## Unreleased: the recipe screen, and a "+" that needs no unlock
