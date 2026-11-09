@@ -8,7 +8,7 @@ priority = 100
 # names hook points 411 instead (compatibility.json "hooks") and builds on any
 # Horizon at least that new.
 [compatibility]
-horizon_revision = "2ba89202f29221e821cc7e792e3b3649df58e14d"
+horizon_revision = "6e255d87595a85d76225564984a25acf38689aec"
 
 # runtime.rs becomes the module crate::game::jei.
 [[module]]

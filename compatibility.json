@@ -1,7 +1,7 @@
 {
   "game": "26.3",
   "horizon_repository": "https://github.com/J5Casey/horizon",
-  "horizon_revision": "2ba89202f29221e821cc7e792e3b3649df58e14d",
+  "horizon_revision": "6e255d87595a85d76225564984a25acf38689aec",
   "horizon_mixins_repository": "https://github.com/horizon-rust/horizon-mixins",
   "horizon_mixins_revision": "e8cd0aa38cffef49cb2e088ef716baa107148c02"
 }
