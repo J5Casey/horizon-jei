@@ -155,3 +155,24 @@ bindings = [
   { name = "stack", ty = "&horizon_client::items::ItemStack", value = "stack" },
   { name = "lines", ty = "&mut Vec<(horizon_client::text::Text, u32)>", value = "&mut *lines" },
 ]
+# The server sends its recipes (the world's data packs merged) to the viewer:
+# a data pack's own recipes show, and the "+" names recipes the server has.
+
+[[injection]]
+id = "datapack_sync"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_datapack_sync"
+helper = "datapack_sync.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "recipe_types", ty = "&mut Vec<String>", value = "&mut *recipe_types" },
+]
+
+[[injection]]
+id = "recipes_received"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_recipes_received"
+helper = "recipes_received.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+]
