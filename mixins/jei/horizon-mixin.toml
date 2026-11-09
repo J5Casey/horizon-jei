@@ -3,12 +3,13 @@ id = "jei"
 version = "0.2.2-braid.1"
 priority = 100
 
-# Braid's build: it pins J5Casey/horizon braid/dev4, whose recipe viewer API
-# (recipe_lookup, recipe categories) is not merged upstream yet. Upstream JEI
+# Braid's build: it pins a horizon-rust/horizon main commit, because the
+# recipe viewer API it uses (recipe_lookup, recipe categories, panel_style,
+# transfer_recipe_all) is merged but not stamped with API numbers yet. Upstream JEI
 # names hook points 411 instead (compatibility.json "hooks") and builds on any
 # Horizon at least that new.
 [compatibility]
-horizon_revision = "bc3dcdd7cf560a11b9d6f4414e7c42cdc79bcfe7"
+horizon_revision = "a3bf6531e07f6292414eda44773d30ab0a47f9db"
 
 # runtime.rs becomes the module crate::game::jei.
 [[module]]
@@ -234,7 +235,7 @@ bindings = [
   { name = "screen", ty = "&crate::game::native_hooks::NativeScreenView<'_>", value = "screen" },
 ]
 
-# Horizon's recipe viewer API (braid/dev4 until it merges upstream): another
+# Horizon's recipe viewer API (horizon-rust/horizon#13070): another
 # mod's screen asks for a stack's recipes, uses or a key (the quest book), and
 # mods declare categories of their own (void fishing, sieves).
 

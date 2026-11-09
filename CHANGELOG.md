@@ -1,9 +1,11 @@
 # Changelog
 
-## 0.2.2-braid.1: Braid's build on J5Casey/horizon braid/dev4
+## 0.2.2-braid.1: Braid's build on horizon-rust/horizon main
 
 The unreleased recipe screen and "+" below, plus Horizon's recipe viewer API
-(not upstream yet, so this build pins braid/dev4 `860cc54`):
+(horizon-rust/horizon#13070, merged but not stamped with an API number yet, so
+this build pins main `a3bf653`; it pinned J5Casey/horizon braid/dev4 to dev6
+before the PR merged):
 
 - **Other mods' lookups.** `native_recipe_lookup`: a quest book's item asks
   for its recipes (click), its uses (right click) or a key over it (R, U, and A
