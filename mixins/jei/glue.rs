@@ -36,6 +36,9 @@ struct State {
     screen: Option<(&'static str, Option<String>)>,
     /// A screen was drawn since the last frame began.
     screen_seen: bool,
+    /// Where this frame's screen is and the pointer, for the recipe screen
+    /// `gui_render_post` draws.
+    overlay_at: Option<([f32; 4], [f32; 2])>,
     /// The server's recipes arrived (`native_recipes_received`): build the
     /// viewer again from them.
     rebuild: bool,
@@ -82,6 +85,7 @@ impl State {
             drag: None,
             screen: None,
             screen_seen: false,
+            overlay_at: None,
             rebuild: false,
             overlay: None,
             overlay_pressed: false,
@@ -308,6 +312,23 @@ fn remove_bookmark(index: usize) {
 
 /// The bookmark bar over a container screen: its slots, the item in each and
 /// the name of the one under the pointer, as the game finished drawing.
+/// The recipe screen, after the whole GUI: over the screen it opened on
+/// (`screen_render_post` said where that is this frame).
+pub(super) fn gui_render_post(game: &Game<'_>, batch: &mut horizon_client::hud::HudBatch) {
+    let at = STATE.with(|s| s.borrow_mut().overlay_at.take());
+    let Some((rect, mouse)) = at else {
+        return;
+    };
+    if !game.native_on(jei::ID) {
+        return;
+    }
+    STATE.with(|s| {
+        if let Some(overlay) = s.borrow().overlay.as_ref() {
+            draw_overlay(game, batch, rect, mouse, overlay);
+        }
+    });
+}
+
 pub(super) fn screen_render_post(
     game: &Game<'_>,
     batch: &mut horizon_client::hud::HudBatch,
@@ -322,11 +343,9 @@ pub(super) fn screen_render_post(
     if !game.native_on(jei::ID) {
         return;
     }
-    STATE.with(|s| {
-        if let Some(overlay) = s.borrow().overlay.as_ref() {
-            draw_overlay(game, batch, screen, overlay);
-        }
-    });
+    // The recipe screen itself draws in `gui_render_post`, over this screen
+    // and whatever a mod drew on it after us; it needs where this one is.
+    STATE.with(|s| s.borrow_mut().overlay_at = Some((screen.rect, screen.mouse)));
     if !bar_screen(screen) {
         return;
     }
@@ -756,6 +775,14 @@ fn apply(game: &mut Game<'_>, out: Out) -> Result<(), String> {
                     nothing_open && game.native_mod_screen_open(jei::ID)
                 }
             };
+            // Notes wrap to the window's width (196 at most, less its margins), so the
+            // geometry, which counts their lines, sizes them.
+            let mut views = views;
+            for view in &mut views {
+                if !view.note.is_empty() {
+                    view.note = jei::wrap(&view.note, 180.0, |t| game.native_text_width(t)).join("\n");
+                }
+            }
             STATE.with(|s| {
                 let mut state = s.borrow_mut();
                 let page = match &state.overlay {
@@ -1181,19 +1208,20 @@ fn centred(
     game.native_text(batch, &text, [(x - w / 2.0).round(), y], rgb, false);
 }
 
-/// The recipe screen, over the screen the game drew.
+/// The recipe screen, over the screen at `rect` (`mouse`: the pointer).
 fn draw_overlay(
     game: &Game<'_>,
     batch: &mut horizon_client::hud::HudBatch,
-    screen: &NativeScreenView<'_>,
+    rect: [f32; 4],
+    mouse: [f32; 2],
     overlay: &Overlay,
 ) {
     let gui = [batch.width, batch.height];
     let g = overlay_geom(overlay, gui);
     let lang = lang(game);
     // The screen under it dims, as under a vanilla screen opened over another.
-    game.native_fill(batch, screen.rect, DIM);
-    let hit = overlay_hit(overlay, gui, screen.mouse);
+    game.native_fill(batch, rect, DIM);
+    let hit = overlay_hit(overlay, gui, mouse);
     // Tabs: the selected one joins the window.
     for (i, rect) in &g.tabs {
         let selected = *i == overlay.tab;
@@ -1248,10 +1276,17 @@ fn draw_overlay(
     }
     let pages = geo::pages(&overlay.views, g.content);
     let page = overlay.page.min(pages.len().saturating_sub(1));
-    let line = if overlay.subtitle.is_empty() {
-        lang.page_of(page, pages.len())
+    // A one-page category shows its whole subtitle there; more pages, the page too.
+    let line = match (overlay.subtitle.is_empty(), pages.len() > 1) {
+        (true, _) => lang.page_of(page, pages.len()),
+        (false, false) => overlay.subtitle.clone(),
+        (false, true) => format!("{}  {}", overlay.subtitle, lang.page_of(page, pages.len())),
+    };
+    // The page arrows flank the line only when there are pages to turn.
+    let room = if pages.len() > 1 {
+        g.panel[2] - 44.0
     } else {
-        format!("{}  {}", overlay.subtitle, lang.page_of(page, pages.len()))
+        g.panel[2] - 12.0
     };
     centred(
         game,
@@ -1259,7 +1294,7 @@ fn draw_overlay(
         &line,
         g.page_text[0],
         g.page_text[1],
-        g.panel[2] - 44.0,
+        room,
         0x60_60_60,
     );
     if pages.len() > 1 {
@@ -1363,7 +1398,7 @@ fn draw_overlay(
             .iter()
             .map(|l| horizon_client::text::Text::literal(l.as_str()).resolve_legacy())
             .collect();
-        game.native_gui_tooltip(batch, &texts, screen.mouse);
+        game.native_gui_tooltip(batch, &texts, mouse);
     }
 }
 

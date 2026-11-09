@@ -101,6 +101,19 @@ bindings = [
   { name = "screen", ty = "&crate::game::native_hooks::NativeScreenView<'_>", value = "screen" },
 ]
 
+# The recipe screen draws after the whole GUI, so a mod's own screen (the
+# quest book draws in screen_render_post too) never covers it.
+[[injection]]
+id = "gui_post"
+kind = "HEAD"
+hook = "gui_render_post"
+hook_version = 1
+helper = "gui_post.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "batch", ty = "&mut horizon_client::hud::HudBatch", value = "&mut *batch" },
+]
+
 [[injection]]
 id = "mouse_press"
 kind = "HEAD"
