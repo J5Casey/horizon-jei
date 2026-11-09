@@ -4,7 +4,7 @@
 set -euo pipefail
 
 mod="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-tools="${HORIZON_MODS:-/home/ender/horizon-tools/horizon-mods}"
+tools="${HORIZON_MODS:-/home/ender/JEI-Horizon/horizon-ref/horizon-mods}"
 py="$tools/native/tools/native.py"
 
 # A local ALSA sysroot (docs/dev.md), when the image has no libasound2-dev and no sudo.
