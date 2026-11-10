@@ -21,7 +21,7 @@ same page: R, U and A by default.
 | File | What it is |
 |---|---|
 | `jei.cfg` | The mod's own options, `key=value` a line. |
-| `bookmarks.txt` | The bar, one bookmark a line. |
+| `bookmarks.txt` | The bookmark list, one bookmark a line. |
 
 Both are made with their defaults when missing, written when a setting changes, and read once when
 the mod first needs them (a world opens, the settings page opens, or an item tooltip shows).
@@ -33,7 +33,9 @@ the mod first needs them (a world opens, the settings page opens, or an item too
 |---|---|---|---|
 | `sort` | `name` / `id` | `name` | The item list's order: by the game's name (then id, then variant), or by id. The settings page's "Sort" button and `/jei sort name\|id` change it, and the open list is rewritten at once. |
 | `hints` | `true` / `false` | `true` | The `R: Recipes (n)` and `U: Uses (n)` lines in item tooltips, wherever the game shows one. The bookmark mark (`★ Bookmarked`) shows either way. |
-| `bookmarks` | `true` / `false` | `true` | Draws the bookmark bar over container screens. Turning it off keeps the bookmarks and still bookmarks the stack the A key points at. |
+| `bookmarks` | `true` / `false` | `true` | Shows the bookmark list left of container screens (the ribbon button in the bottom left corner toggles it, as JEI's). Turning it off keeps the bookmarks and still bookmarks the stack the A key points at. |
+| `recipes` | `screen` / `panel` | `screen` | Recipes in JEI's own recipe screen, or in the item panel (0.2's view). |
+| `search` | `centre` / `list` | `centre` | The search bar under the screen's window (JEI's "center search bar"), or under the item list (JEI's default). The settings page's "Search bar" button changes it. |
 
 Unknown keys and unknown values are ignored: an option the file names badly keeps its default.
 
@@ -50,7 +52,7 @@ minecraft:potion	1	[potion="minecraft:strength"]
 components match: a potion of strength and a potion of swiftness are two bookmarks.
 
 Lines starting with `#` and blank lines are skipped; a line without a count is one. The file holds at
-most 24 bookmarks, the bar's two columns of twelve; `/jei bookmarks clear` empties it.
+most 1024 bookmarks, in pages of the list; `/jei bookmarks clear` empties it.
 
 ## Commands
 
@@ -60,5 +62,5 @@ most 24 bookmarks, the bar's two columns of twelve; `/jei bookmarks clear` empti
 | `/jei give` | Toggles "Click gives items". |
 | `/jei sort` | Says the list's order. |
 | `/jei sort name` / `/jei sort id` | Sets it. |
-| `/jei bookmarks clear` | Empties the bookmark bar. |
+| `/jei bookmarks clear` | Empties the bookmark list. |
 | `/jei config` | The paths of `jei.cfg` and `bookmarks.txt`. |

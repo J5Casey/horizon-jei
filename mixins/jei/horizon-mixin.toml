@@ -1,15 +1,16 @@
 [mod]
 id = "jei"
-version = "0.2.2-braid.1"
+version = "0.2.2-braid.2"
 priority = 100
 
-# Braid's build: it pins a horizon-rust/horizon main commit, because the
+# Braid's build: it pins J5Casey/horizon braid/panel-classic (main a3bf653 and
+# NativePanelStyle::Classic, horizon-rust/horizon PR pending), because the
 # recipe viewer API it uses (recipe_lookup, recipe categories, panel_style,
-# transfer_recipe_all) is merged but not stamped with API numbers yet. Upstream JEI
+# transfer_recipe_all) is not stamped with API numbers yet. Upstream JEI
 # names hook points 411 instead (compatibility.json "hooks") and builds on any
 # Horizon at least that new.
 [compatibility]
-horizon_revision = "a3bf6531e07f6292414eda44773d30ab0a47f9db"
+horizon_revision = "7dec4d6afd66c261e05a1f389f908926fba13e91"
 
 # runtime.rs becomes the module crate::game::jei.
 [[module]]
@@ -169,6 +170,18 @@ bindings = [
   { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
   { name = "stack", ty = "&horizon_client::items::ItemStack", value = "stack" },
   { name = "lines", ty = "&mut Vec<(horizon_client::text::Text, u32)>", value = "&mut *lines" },
+]
+
+[[injection]]
+id = "tooltip_pre"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_tooltip_render_pre"
+helper = "tooltip_pre.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "x", ty = "f32", value = "x" },
+  { name = "y", ty = "f32", value = "y" },
+  { name = "cancel", ty = "&mut bool", value = "&mut *cancel" },
 ]
 # The server sends its recipes (the world's data packs merged) to the viewer:
 # a data pack's own recipes show, and the "+" names recipes the server has.

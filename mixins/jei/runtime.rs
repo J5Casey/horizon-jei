@@ -9,7 +9,7 @@
 /// The mod's id: its row, its settings folder and its keys.
 pub const ID: &str = "jei";
 pub const NAME: &str = "JEI";
-pub const VERSION: &str = "0.2.2-braid.1";
+pub const VERSION: &str = "0.2.2-braid.2";
 pub const DESCRIPTION: &str = "An item and recipe viewer: every item beside container screens, with search, recipes, uses and bookmarks.";
 
 /// The hook points' version this build needs: the newest point it hooks
@@ -155,20 +155,6 @@ impl Lang {
         }
     }
 
-    pub fn bookmark_added(self) -> &'static str {
-        match self {
-            Lang::En => "Bookmarked",
-            Lang::Es => "Marcado",
-        }
-    }
-
-    pub fn bookmark_removed(self) -> &'static str {
-        match self {
-            Lang::En => "Bookmark removed",
-            Lang::Es => "Marca quitada",
-        }
-    }
-
     pub fn bookmarks_full(self) -> &'static str {
         match self {
             Lang::En => "The bookmark bar is full",
@@ -217,6 +203,14 @@ impl Lang {
         }
     }
 
+    /// The shapeless icon's tooltip, as JEI's.
+    pub fn shapeless_hint(self) -> &'static str {
+        match self {
+            Lang::En => "Shapeless recipe",
+            Lang::Es => "Receta sin forma",
+        }
+    }
+
     pub fn page_of(self, page: usize, pages: usize) -> String {
         format!("{}/{}", page + 1, pages.max(1))
     }
@@ -224,8 +218,17 @@ impl Lang {
     pub fn bookmarks_button(self, on: bool) -> String {
         let state = if on { "ON" } else { "OFF" };
         match self {
-            Lang::En => format!("Bookmark bar: {state}"),
-            Lang::Es => format!("Barra de marcas: {state}"),
+            Lang::En => format!("Bookmark list: {state}"),
+            Lang::Es => format!("Lista de marcas: {state}"),
+        }
+    }
+
+    pub fn search_button(self, centred: bool) -> String {
+        match (self, centred) {
+            (Lang::En, true) => "Search bar: under the screen".to_owned(),
+            (Lang::En, false) => "Search bar: under the list".to_owned(),
+            (Lang::Es, true) => "Búsqueda: bajo la pantalla".to_owned(),
+            (Lang::Es, false) => "Búsqueda: bajo la lista".to_owned(),
         }
     }
 }
@@ -746,6 +749,8 @@ pub struct View {
     pub slots: Vec<Vec<Stack>>,
     pub results: Vec<Stack>,
     pub note: String,
+    /// A shapeless crafting recipe: JEI's icon says it, not the note.
+    pub shapeless: bool,
     /// The action button: none, or whether it is enabled.
     pub action: Option<bool>,
     /// A category recipe's outputs (`Layout::Chance`); `results` holds their
@@ -876,6 +881,9 @@ pub struct Config {
     /// Recipes in the item panel beside the screen (0.2's view) instead of
     /// JEI's own recipe screen over it.
     pub docked: bool,
+    /// The search box under the screen's window (JEI's "center search
+    /// bar"), else under the item list.
+    pub centred_search: bool,
 }
 
 impl Default for Config {
@@ -885,6 +893,7 @@ impl Default for Config {
             hints: true,
             bookmarks: true,
             docked: false,
+            centred_search: true,
         }
     }
 }
@@ -907,6 +916,7 @@ impl Config {
                 "hints" => config.hints = truthy(value, config.hints),
                 "bookmarks" => config.bookmarks = truthy(value, config.bookmarks),
                 "recipes" => config.docked = value.trim() == "panel",
+                "search" => config.centred_search = value.trim() != "list",
                 _ => {}
             }
         }
@@ -915,11 +925,16 @@ impl Config {
 
     pub fn to_text(self) -> String {
         format!(
-            "sort={}\nhints={}\nbookmarks={}\nrecipes={}\n",
+            "sort={}\nhints={}\nbookmarks={}\nrecipes={}\nsearch={}\n",
             self.sort.code(),
             self.hints,
             self.bookmarks,
-            if self.docked { "panel" } else { "screen" }
+            if self.docked { "panel" } else { "screen" },
+            if self.centred_search {
+                "centre"
+            } else {
+                "list"
+            }
         )
     }
 }
@@ -937,18 +952,15 @@ fn truthy(value: &str, default: bool) -> bool {
 pub enum Toggle {
     Added(usize),
     Removed(usize),
-    /// Twenty-four are the bar's, as JEI's.
+    /// The list holds as many as JEI's file would ever need.
     Full,
 }
 
 /// One slot of the bar, in GUI pixels.
 pub const BOOKMARK_SLOT: f32 = 18.0;
 /// The bar's columns and rows, and its gap from the screen's corner.
-pub const BOOKMARK_COLUMNS: usize = 2;
-pub const BOOKMARK_ROWS: usize = 12;
-pub const BOOKMARK_MARGIN: f32 = 4.0;
 /// The bookmarks the bar holds.
-pub const BOOKMARKS_MAX: usize = BOOKMARK_COLUMNS * BOOKMARK_ROWS;
+pub const BOOKMARKS_MAX: usize = 1024;
 
 /// The bookmarks, in the order the bar shows them.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1188,64 +1200,86 @@ fn raise(
     }
 }
 
-/// The bookmark bar's places: two columns at the screen's top left corner,
-/// twelve rows or as many as fit.
+/// The bookmark list left of the screen's window, as JEI's `BookmarkOverlay`
+/// lays it out: from 2 pixels in from the screen's left edge to 2 short of
+/// the window, a row of page buttons at the top, the bookmarks' grid flush
+/// left and centred in its height under it, and the list's button in the
+/// bottom left corner.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Bar {
+pub struct LeftArea {
+    /// The page buttons' row: as wide as the grid, at least 80.
+    pub nav: [f32; 4],
     pub origin: [f32; 2],
     pub columns: usize,
     pub rows: usize,
+    /// The button that shows or hides the list.
+    pub button: [f32; 4],
 }
 
-pub fn bookmark_bar(height: f32) -> Bar {
-    let fits = (((height - 2.0 * BOOKMARK_MARGIN) / BOOKMARK_SLOT).floor()).max(0.0) as usize;
-    Bar {
-        origin: [BOOKMARK_MARGIN, BOOKMARK_MARGIN],
-        columns: BOOKMARK_COLUMNS,
-        rows: fits.clamp(1, BOOKMARK_ROWS),
+/// The list beside a window whose left edge is at `window_left`, on a GUI
+/// `gui` big. The grid is empty (no columns) when there is no room for 80
+/// pixels; the button stays.
+pub fn bookmark_area(gui: [f32; 2], window_left: f32) -> LeftArea {
+    const PAD: f32 = 2.0;
+    const BUTTON: f32 = 20.0;
+    let width = (window_left - 2.0 * PAD).max(0.0);
+    let height = gui[1] - 2.0 * PAD;
+    let room = width >= 80.0;
+    let columns = if room {
+        (width / BOOKMARK_SLOT).floor() as usize
+    } else {
+        0
+    };
+    let grid_h = (height - (BUTTON + 4.0) - BUTTON).max(0.0);
+    let rows = if room {
+        (grid_h / BOOKMARK_SLOT).floor() as usize
+    } else {
+        0
+    };
+    let top = PAD + BUTTON + ((grid_h - rows as f32 * BOOKMARK_SLOT) / 2.0).floor();
+    let nav_w = (columns as f32 * BOOKMARK_SLOT).max(4.0 * BUTTON);
+    LeftArea {
+        nav: [PAD, PAD, nav_w, BUTTON],
+        origin: [PAD, top],
+        columns,
+        rows,
+        button: [PAD, gui[1] - PAD - BUTTON - 2.0, BUTTON, BUTTON],
     }
 }
 
-/// The bar's places for a hit test: always the twelve rows, since the
-/// screen's height only decides how many of them it draws.
-pub fn bookmark_slots() -> Bar {
-    Bar {
-        origin: [BOOKMARK_MARGIN, BOOKMARK_MARGIN],
-        columns: BOOKMARK_COLUMNS,
-        rows: BOOKMARK_ROWS,
-    }
-}
-
-impl Bar {
-    pub fn capacity(&self) -> usize {
+impl LeftArea {
+    pub fn per_page(&self) -> usize {
         self.columns * self.rows
     }
 
-    /// The whole bar.
-    pub fn rect(&self) -> [f32; 4] {
-        [
-            self.origin[0],
-            self.origin[1],
-            self.columns as f32 * BOOKMARK_SLOT,
-            self.rows as f32 * BOOKMARK_SLOT,
-        ]
+    pub fn pages(&self, count: usize) -> usize {
+        count.div_ceil(self.per_page().max(1)).max(1)
     }
 
-    /// Slot `index`'s place: column by column, from the top.
-    pub fn slot(&self, index: usize) -> [f32; 4] {
-        let column = index % self.columns;
-        let row = index / self.columns;
+    /// The page buttons, back then forward.
+    pub fn nav_buttons(&self) -> [[f32; 4]; 2] {
+        let [x, y, w, h] = self.nav;
+        [[x, y, h, h], [x + w - h, y, h, h]]
+    }
+
+    /// The slot of the `n`th bookmark of a page: row by row.
+    pub fn slot(&self, n: usize) -> [f32; 4] {
+        let columns = self.columns.max(1);
         [
-            self.origin[0] + column as f32 * BOOKMARK_SLOT,
-            self.origin[1] + row as f32 * BOOKMARK_SLOT,
+            self.origin[0] + (n % columns) as f32 * BOOKMARK_SLOT,
+            self.origin[1] + (n / columns) as f32 * BOOKMARK_SLOT,
             BOOKMARK_SLOT,
             BOOKMARK_SLOT,
         ]
     }
 
-    /// The slot under a point, among `count` slots.
-    pub fn hit(&self, point: [f32; 2], count: usize) -> Option<usize> {
-        (0..count.min(self.capacity())).find(|&index| inside(point, self.slot(index)))
+    /// The bookmark under a point on page `page` of `count`, by its index.
+    pub fn hit(&self, point: [f32; 2], page: usize, count: usize) -> Option<usize> {
+        let first = page * self.per_page();
+        (0..self.per_page())
+            .take_while(|n| first + n < count)
+            .find(|&n| inside(point, self.slot(n)))
+            .map(|n| first + n)
     }
 }
 
@@ -1789,6 +1823,7 @@ impl Viewer {
                 .collect(),
             results: recipe.outputs.iter().map(|o| o.stack.clone()).collect(),
             note: recipe.notes.join("\n"),
+            shapeless: false,
             action: None,
             chances: recipe.outputs.clone(),
         }
@@ -1873,6 +1908,7 @@ impl Viewer {
             slots,
             results,
             note,
+            shapeless: recipe.kind == Kind::CraftingShapeless,
             action: (recipe.book_id >= 0 && recipe.kind.station() == Station::Crafting)
                 .then(|| fits(recipe, grid)),
             chances: Vec::new(),
@@ -1956,98 +1992,150 @@ pub fn screen_grid(id: &str, menu: Option<&str>, mod_grid: Option<u32>) -> u32 {
 /// The recipe screen: JEI's own window of recipes, centred over whatever
 /// screen is open, with the tabs above it, the catalysts left of it and the
 /// pages inside. Places in GUI pixels; the glue draws them.
+/// JEI 1.12's recipe screen (`RecipesGui`), in GUI pixels: a window 198 wide
+/// with two header rows of small buttons, 24 pixel tabs above it, the
+/// catalysts' column at its left, and the recipes of a page spread down it,
+/// each in its frame.
 pub mod screen {
     use super::{Layout, View};
 
     pub const SLOT: f32 = 18.0;
-    pub const TAB: [f32; 2] = [24.0, 22.0];
+    /// The window's width, and its height's bounds: the GUI's less 68.
+    pub const WIDTH: f32 = 198.0;
+    pub const HEIGHT_MIN: f32 = 175.0;
+    pub const HEIGHT_MAX: f32 = 350.0;
+    pub const TAB: f32 = 24.0;
+    /// The header's small buttons, and the tab pages' row of big ones.
+    pub const BUTTON: f32 = 13.0;
+    pub const NAV: f32 = 20.0;
+    /// The header: the category row and the page row.
+    pub const HEADER: f32 = 32.0;
+    pub const BORDER: f32 = 6.0;
+    /// The frame round each recipe.
+    pub const FRAME: f32 = 4.0;
+    /// The least room a recipe takes beyond its own height.
+    pub const SPACING: f32 = 14.0;
     /// One output of a category recipe: the slot and two short lines.
     pub const CHANCE: [f32; 2] = [52.0, 20.0];
-    /// Between two recipes of a page.
-    pub const GAP: f32 = 8.0;
     pub const LINE: f32 = 10.0;
-    pub const ARROW: f32 = 24.0;
-    pub const BUTTON: f32 = 12.0;
+    /// The vanilla crafting table's and furnace's backgrounds, as JEI cuts them.
+    pub const CRAFTING: [f32; 2] = [116.0, 54.0];
+    pub const COOKING: [f32; 2] = [82.0, 54.0];
+    /// Any other recipe: its inputs, the arrow's room, the result.
+    pub const ARROW: f32 = 30.0;
+    /// A catalyst's step in its column.
+    pub const CATALYST: f32 = 16.0;
 
     /// Where the window's parts are.
     #[derive(Clone, Debug, PartialEq)]
     pub struct Geom {
         pub panel: [f32; 4],
-        /// The tabs shown: their index and place.
+        /// The tabs of the tab page shown: their index and place.
         pub tabs: Vec<(usize, [f32; 4])>,
+        pub tab_page: usize,
+        pub tab_pages: usize,
+        /// The row of page buttons over the tabs, when they need pages.
+        pub tab_nav: [f32; 4],
+        /// The category row: its buttons and the bar between them.
         pub prev_tab: [f32; 4],
         pub next_tab: [f32; 4],
-        /// The middle of the title's line.
-        pub title: [f32; 2],
+        pub title_bar: [f32; 4],
+        /// The page row.
         pub prev_page: [f32; 4],
         pub next_page: [f32; 4],
-        pub page_text: [f32; 2],
+        pub page_bar: [f32; 4],
+        /// Under the header.
         pub content: [f32; 4],
         pub catalyst_panel: [f32; 4],
+        /// Each catalyst's item, 16 pixels square.
         pub catalysts: Vec<[f32; 4]>,
     }
 
-    pub fn geom(gui: [f32; 2], tabs: usize, selected: usize, catalysts: usize) -> Geom {
-        let width = 196.0f32.min(gui[0] - 56.0).max(120.0);
-        let x = ((gui[0] - width) / 2.0).floor();
-        let y = 4.0 + TAB[1];
-        let height = (gui[1] - y - 6.0).clamp(80.0, 300.0);
-        let fit = ((width / TAB[0]).floor() as usize).max(1);
-        let first = selected
-            .saturating_sub(fit / 2)
-            .min(tabs.saturating_sub(fit));
-        let shown_tabs = (first..tabs.min(first + fit))
-            .enumerate()
-            .map(|(n, i)| (i, [x + n as f32 * TAB[0], 4.0, TAB[0], TAB[1]]))
-            .collect();
-        let fits = (((height - 10.0) / SLOT).floor() as usize).max(1);
-        let shown = catalysts.min(fits);
-        let catalyst_panel = [x - 24.0, y + 4.0, 24.0, 6.0 + shown as f32 * SLOT];
-        Geom {
-            panel: [x, y, width, height],
-            tabs: shown_tabs,
-            prev_tab: [x + 5.0, y + 5.0, 13.0, 12.0],
-            next_tab: [x + width - 18.0, y + 5.0, 13.0, 12.0],
-            title: [x + width / 2.0, y + 7.0],
-            prev_page: [x + 5.0, y + 20.0, 13.0, 12.0],
-            next_page: [x + width - 18.0, y + 20.0, 13.0, 12.0],
-            page_text: [x + width / 2.0, y + 22.0],
-            content: [x + 6.0, y + 38.0, width - 12.0, height - 44.0],
-            catalyst_panel,
-            catalysts: (0..shown)
-                .map(|i| [x - 21.0, y + 7.0 + i as f32 * SLOT, SLOT, SLOT])
-                .collect(),
+    impl Geom {
+        /// The tab pages' buttons, back then forward.
+        pub fn tab_buttons(&self) -> [[f32; 4]; 2] {
+            let [x, y, w, h] = self.tab_nav;
+            [[x, y, h, h], [x + w - h, y, h, h]]
+        }
+
+        /// The leftmost the window reaches: its catalysts' column, if any.
+        pub fn left(&self) -> f32 {
+            if self.catalysts.is_empty() {
+                self.panel[0]
+            } else {
+                self.catalyst_panel[0]
+            }
         }
     }
 
-    /// The window as tall as its tallest page needs (and the catalysts'
-    /// column), not taller than the GUI lets it be.
-    pub fn fitted(
+    /// The window on a GUI this size: `tabs` tabs with `selected` chosen, the
+    /// tab page `tab_page` (else the selected tab's), and `catalysts` items.
+    pub fn geom(
         gui: [f32; 2],
         tabs: usize,
         selected: usize,
+        tab_page: Option<usize>,
         catalysts: usize,
-        views: &[View],
     ) -> Geom {
-        let mut g = geom(gui, tabs, selected, catalysts);
-        let chrome = g.panel[3] - g.content[3];
-        let tallest = pages(views, g.content)
-            .iter()
-            .map(|page| {
-                let heights = page
-                    .iter()
-                    .map(|p| size(&views[p.view], p, g.content[2])[1]);
-                heights.sum::<f32>() + GAP * page.len().saturating_sub(1) as f32
+        let free = gui[1] - 68.0;
+        let height = free.clamp(HEIGHT_MIN, HEIGHT_MAX);
+        let extra = (free - HEIGHT_MAX).max(0.0);
+        let x = ((gui[0] - WIDTH) / 2.0).floor();
+        let y = TAB + 21.0 + (extra / 2.0).floor();
+
+        let per = (((WIDTH - 4.0) / TAB).floor() as usize).max(1);
+        let tab_pages = tabs.div_ceil(per).max(1);
+        let tab_page = tab_page.unwrap_or(selected / per).min(tab_pages - 1);
+        let tab_y = y - TAB + 3.0;
+        let first = tab_page * per;
+        let shown_tabs = (first..tabs.min(first + per))
+            .enumerate()
+            .map(|(n, i)| (i, [x + 2.0 + n as f32 * TAB, tab_y, TAB, TAB]))
+            .collect();
+        let tab_nav = [x + 2.0, tab_y - 2.0 - NAV, per.min(tabs) as f32 * TAB, NAV];
+
+        let left = x + BORDER;
+        let right = x + WIDTH - BORDER - BUTTON;
+        let bar = |row: f32| [left + BUTTON, row, right - left - BUTTON, BUTTON];
+        let row1 = y + 4.0;
+        let row2 = row1 + BUTTON + 2.0;
+
+        // RecipeCatalysts: one column while they fit the window's height.
+        let room = height - 8.0;
+        let mut per_column = (((room - 12.0) / CATALYST).floor() as usize).max(1);
+        let columns = catalysts.div_ceil(per_column).max(1);
+        per_column = catalysts.div_ceil(columns);
+        let cw = 12.0 + columns as f32 * CATALYST;
+        let ch = 12.0 + per_column as f32 * CATALYST;
+        let cx = x - cw + 6.0;
+        let catalyst_rects = (0..catalysts)
+            .map(|i| {
+                let (column, row) = (i / per_column.max(1), i % per_column.max(1));
+                [
+                    cx + 6.0 + column as f32 * CATALYST,
+                    y + 6.0 + row as f32 * CATALYST,
+                    CATALYST,
+                    CATALYST,
+                ]
             })
-            .fold(0.0f32, f32::max);
-        let height = (tallest + chrome)
-            .max(g.catalyst_panel[3] + 8.0)
-            .max(80.0)
-            .min(g.panel[3])
-            .ceil();
-        g.panel[3] = height;
-        g.content[3] = height - chrome;
-        g
+            .collect();
+
+        Geom {
+            panel: [x, y, WIDTH, height],
+            tabs: shown_tabs,
+            tab_page,
+            tab_pages,
+            tab_nav,
+            prev_tab: [left, row1, BUTTON, BUTTON],
+            next_tab: [right, row1, BUTTON, BUTTON],
+            title_bar: bar(row1),
+            prev_page: [left, row2, BUTTON, BUTTON],
+            next_page: [right, row2, BUTTON, BUTTON],
+            page_bar: bar(row2),
+            content: [x, y + HEADER, WIDTH, height - HEADER],
+            catalyst_panel: [cx, y, cw, ch],
+            catalysts: catalyst_rects,
+        }
     }
 
     /// What a part of a recipe on the screen is.
@@ -2060,6 +2148,17 @@ pub mod screen {
         Result(usize),
     }
 
+    /// What a recipe is drawn on.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Background {
+        /// The crafting table's grid, arrow and result slot.
+        Crafting,
+        /// The furnace's input, flame, fuel slot, arrow and result slot.
+        Cooking,
+        /// Slots and an arrow of their own.
+        Slots,
+    }
+
     /// One recipe, or a slice of a category recipe's outputs, on a page.
     #[derive(Clone, Debug, PartialEq)]
     pub struct Piece {
@@ -2070,29 +2169,49 @@ pub mod screen {
     }
 
     fn note_lines(view: &View) -> usize {
-        if view.note.is_empty() {
+        if view.note.is_empty() || view.shapeless || view.layout == Layout::Cooking {
             0
         } else {
             view.note.split('\n').count()
         }
     }
 
-    fn chance_columns(content_width: f32) -> usize {
-        ((content_width / CHANCE[0]).floor() as usize).max(1)
+    /// The room inside the window's border and a recipe's frame: a
+    /// category recipe takes all of it, its notes wrapped to it.
+    pub fn inner_width(content_width: f32) -> f32 {
+        content_width - 2.0 * (BORDER + FRAME)
     }
 
-    /// The size of a piece's block.
+    fn chance_columns(content_width: f32) -> usize {
+        ((inner_width(content_width) / CHANCE[0]).floor() as usize).max(1)
+    }
+
+    /// What a recipe is drawn on.
+    pub fn background(view: &View) -> Background {
+        match view.layout {
+            Layout::Grid if view.width <= 3 && view.height <= 3 => Background::Crafting,
+            Layout::Cooking => Background::Cooking,
+            _ => Background::Slots,
+        }
+    }
+
+    /// The columns and rows of a recipe's inputs drawn on slots of its own.
+    fn input_grid(view: &View) -> (usize, usize) {
+        match view.layout {
+            Layout::Grid => (view.width.max(1) as usize, view.height.max(1) as usize),
+            Layout::Smithing => (3, 1),
+            Layout::Brewing => (2, 1),
+            _ => (1, 1),
+        }
+    }
+
+    /// The size of a piece's block, its frame left out.
     pub fn size(view: &View, piece: &Piece, content_width: f32) -> [f32; 2] {
         let notes = note_lines(view) as f32 * LINE;
-        let [w, h] = match view.layout {
-            Layout::Grid => [
-                view.width.max(1) as f32 * SLOT + ARROW + SLOT,
-                view.height.max(1) as f32 * SLOT,
-            ],
-            Layout::Cooking | Layout::Single => [SLOT + ARROW + SLOT, SLOT],
-            Layout::Smithing => [3.0 * SLOT + ARROW + SLOT, SLOT],
-            Layout::Brewing => [2.0 * SLOT + ARROW + SLOT, SLOT],
-            Layout::Chance => {
+        let [w, h] = match (view.layout, background(view)) {
+            (_, Background::Crafting) => CRAFTING,
+            (_, Background::Cooking) => COOKING,
+            (Layout::Chance, _) => {
                 let columns = chance_columns(content_width);
                 let rows = piece.outputs.len().div_ceil(columns) as f32;
                 let inputs = if view.slots.is_empty() {
@@ -2100,14 +2219,20 @@ pub mod screen {
                 } else {
                     SLOT + 4.0
                 };
-                [columns as f32 * CHANCE[0], inputs + rows * CHANCE[1]]
+                let w = inner_width(content_width).max(columns as f32 * CHANCE[0]);
+                [w, inputs + rows * CHANCE[1]]
+            }
+            _ => {
+                let (columns, rows) = input_grid(view);
+                [columns as f32 * SLOT + ARROW + SLOT, rows as f32 * SLOT]
             }
         };
-        [w, h + notes]
+        [w, h + if notes > 0.0 { notes + 2.0 } else { 0.0 }]
     }
 
     /// The pieces, page by page: as many recipes as fit the content's
-    /// height; a category recipe too tall for a page goes on over pages.
+    /// height with JEI's room between them; a category recipe too tall for
+    /// a page goes on over pages.
     pub fn pages(views: &[View], content: [f32; 4]) -> Vec<Vec<Piece>> {
         let mut pieces = Vec::new();
         for (index, view) in views.iter().enumerate() {
@@ -2120,15 +2245,12 @@ pub mod screen {
                 continue;
             }
             let columns = chance_columns(content[2]);
-            let fixed = size(
-                view,
-                &Piece {
-                    view: index,
-                    outputs: 0..0,
-                },
-                content[2],
-            )[1];
-            let rows = (((content[3] - fixed) / CHANCE[1]).floor() as usize).max(1);
+            let empty = Piece {
+                view: index,
+                outputs: 0..0,
+            };
+            let fixed = size(view, &empty, content[2])[1];
+            let rows = (((content[3] - SPACING - fixed) / CHANCE[1]).floor() as usize).max(1);
             let per = rows * columns;
             let mut from = 0;
             while from < count {
@@ -2143,10 +2265,10 @@ pub mod screen {
         let mut pages: Vec<Vec<Piece>> = Vec::new();
         let mut used = 0.0;
         for piece in pieces {
-            let h = size(&views[piece.view], &piece, content[2])[1];
+            let h = size(&views[piece.view], &piece, content[2])[1] + SPACING;
             match pages.last_mut() {
-                Some(page) if !page.is_empty() && used + GAP + h <= content[3] => {
-                    used += GAP + h;
+                Some(page) if !page.is_empty() && used + h <= content[3] => {
+                    used += h;
                     page.push(piece);
                 }
                 _ => {
@@ -2158,51 +2280,79 @@ pub mod screen {
         pages
     }
 
-    /// A piece's parts on the screen, from the top left of its block: each
-    /// slot and its place, the arrow's place, and where the "+" goes.
-    #[derive(Clone, Debug, Default, PartialEq)]
+    /// A piece's parts on the screen, from the top left of its block.
+    #[derive(Clone, Debug, PartialEq)]
     pub struct Placed {
+        pub background: Background,
+        /// The block, its frame left out.
+        pub rect: [f32; 4],
         pub slots: Vec<(Part, [f32; 4])>,
+        /// The arrow of a recipe on its own slots.
         pub arrow: Option<[f32; 4]>,
+        /// The "+", outside the frame at the block's bottom right.
         pub button: Option<[f32; 4]>,
+        /// The shapeless icon at the block's top right.
+        pub shapeless: Option<[f32; 4]>,
         /// Where the notes' first line starts.
         pub notes: [f32; 2],
     }
 
     pub fn place(view: &View, piece: &Piece, at: [f32; 2], content_width: f32) -> Placed {
         let [x, y] = at;
-        let [w, _] = size(view, piece, content_width);
+        let [w, h] = size(view, piece, content_width);
         let slot = |px: f32, py: f32| [px, py, SLOT, SLOT];
-        let mut placed = Placed::default();
-        let body_h = match view.layout {
-            Layout::Chance => {
+        let background = background(view);
+        let mut slots = Vec::new();
+        let mut arrow = None;
+        let body_h = match (view.layout, background) {
+            (_, Background::Crafting) => {
+                // CraftingRecipeCategory: the inputs at 18 pixel steps, the
+                // result in the big slot.
+                let columns = view.width.max(1) as usize;
+                for i in 0..view.slots.len().min(9) {
+                    let (c, r) = (i % columns, i / columns);
+                    slots.push((
+                        Part::Input(i),
+                        slot(x + c as f32 * SLOT, y + r as f32 * SLOT),
+                    ));
+                }
+                if !view.results.is_empty() {
+                    slots.push((Part::Result(0), slot(x + 94.0, y + 18.0)));
+                }
+                CRAFTING[1]
+            }
+            (_, Background::Cooking) => {
+                if !view.slots.is_empty() {
+                    slots.push((Part::Input(0), slot(x, y)));
+                }
+                if !view.results.is_empty() {
+                    slots.push((Part::Result(0), slot(x + 60.0, y + 18.0)));
+                }
+                COOKING[1]
+            }
+            (Layout::Chance, _) => {
                 let columns = chance_columns(content_width);
+                // The outputs' columns centred across the frame.
+                let left = x + ((w - columns as f32 * CHANCE[0]) / 2.0).floor();
                 let mut top = y;
                 if !view.slots.is_empty() {
                     for i in 0..view.slots.len() {
-                        placed
-                            .slots
-                            .push((Part::Input(i), slot(x + i as f32 * SLOT, y)));
+                        slots.push((Part::Input(i), slot(left + i as f32 * SLOT, y)));
                     }
                     top += SLOT + 4.0;
                 }
                 for (n, i) in piece.outputs.clone().enumerate() {
-                    let cx = x + (n % columns) as f32 * CHANCE[0];
+                    let cx = left + (n % columns) as f32 * CHANCE[0];
                     let cy = top + (n / columns) as f32 * CHANCE[1];
-                    placed.slots.push((Part::Result(i), slot(cx, cy)));
+                    slots.push((Part::Result(i), slot(cx, cy)));
                 }
-                size(view, piece, content_width)[1] - note_lines(view) as f32 * LINE
+                h - note_lines(view) as f32 * LINE - if note_lines(view) > 0 { 2.0 } else { 0.0 }
             }
             _ => {
-                let (columns, rows) = match view.layout {
-                    Layout::Grid => (view.width.max(1) as usize, view.height.max(1) as usize),
-                    Layout::Smithing => (3, 1),
-                    Layout::Brewing => (2, 1),
-                    _ => (1, 1),
-                };
+                let (columns, rows) = input_grid(view);
                 for i in 0..view.slots.len().min(columns * rows) {
                     let (c, r) = (i % columns, i / columns);
-                    placed.slots.push((
+                    slots.push((
                         Part::Input(i),
                         slot(x + c as f32 * SLOT, y + r as f32 * SLOT),
                     ));
@@ -2210,29 +2360,48 @@ pub mod screen {
                 let grid_h = rows as f32 * SLOT;
                 let mid = y + ((grid_h - SLOT) / 2.0).floor();
                 let ax = x + columns as f32 * SLOT;
-                placed.arrow = Some([ax + 3.0, mid + 4.0, ARROW - 6.0, 10.0]);
-                for i in 0..view.results.len().min(1) {
-                    placed.slots.push((Part::Result(i), slot(ax + ARROW, mid)));
-                }
-                if view.action.is_some() {
-                    placed.button = Some([x + w + 4.0, y + grid_h - BUTTON, BUTTON, BUTTON]);
+                // The crafting table's grey arrow, 22x15.
+                arrow = Some([ax + 4.0, mid + 1.0, 22.0, 15.0]);
+                if !view.results.is_empty() {
+                    slots.push((Part::Result(0), slot(ax + ARROW, mid)));
                 }
                 grid_h
             }
         };
-        placed.notes = [x, y + body_h + 2.0];
-        placed
+        let button = view
+            .action
+            .map(|_| [x + w + FRAME + 2.0, y + body_h - BUTTON, BUTTON, BUTTON]);
+        let shapeless = (view.shapeless && background == Background::Crafting)
+            .then(|| [x + CRAFTING[0] - 9.0, y, 9.0, 9.0]);
+        Placed {
+            background,
+            rect: [x, y, w, h],
+            slots,
+            arrow,
+            button,
+            shapeless,
+            notes: [x, y + body_h + 2.0],
+        }
     }
 
-    /// A page's pieces with the top left of each, centred across the content.
+    /// A page's pieces with the top left of each: centred across the window
+    /// and spread down it with even room between them, as JEI spaces them.
     pub fn layout(views: &[View], page: &[Piece], content: [f32; 4]) -> Vec<(usize, [f32; 2])> {
-        let mut y = content[1];
-        page.iter()
+        let sizes: Vec<[f32; 2]> = page
+            .iter()
+            .map(|piece| size(&views[piece.view], piece, content[2]))
+            .collect();
+        let total: f32 = sizes.iter().map(|s| s[1]).sum();
+        let gap = ((content[3] - total) / (page.len() as f32 + 1.0))
+            .floor()
+            .max(FRAME);
+        let mut y = content[1] + gap;
+        sizes
+            .iter()
             .enumerate()
-            .map(|(n, piece)| {
-                let [w, h] = size(&views[piece.view], piece, content[2]);
+            .map(|(n, [w, h])| {
                 let at = [(content[0] + (content[2] - w) / 2.0).floor(), y];
-                y += h + GAP;
+                y += h + gap;
                 (n, at)
             })
             .collect()
@@ -2287,7 +2456,7 @@ impl Session {
 mod tests {
     #[test]
     fn title_has_name_and_version() {
-        assert_eq!(super::title(), "JEI 0.2.2-braid.1");
+        assert_eq!(super::title(), "JEI 0.2.2-braid.2");
     }
 
     #[test]
@@ -3137,10 +3306,11 @@ mod tests {
             slots: Vec::new(),
             results: Vec::new(),
             note: String::new(),
+            shapeless: false,
             action: None,
             chances: c.recipes[0].outputs.clone(),
         };
-        let g = screen::geom([427.0, 240.0], 1, 0, 1);
+        let g = screen::geom([427.0, 240.0], 1, 0, None, 1);
         let pages = screen::pages(std::slice::from_ref(&view), g.content);
         assert!(pages.len() > 1, "{pages:?}");
         let shown: usize = pages.iter().flatten().map(|p| p.outputs.len()).sum();
@@ -3158,8 +3328,69 @@ mod tests {
                 }
             }
         }
-        let fitted = screen::fitted([427.0, 680.0], 1, 0, 1, std::slice::from_ref(&view));
-        assert!(fitted.panel[3] < 300.0);
+    }
+
+    /// JEI 1.12's RecipesGui on a 570x473 GUI: 198 wide and 350 tall (the
+    /// most), its two header rows, the tabs over it in pages of eight, the
+    /// catalysts' column at its left, and four crafting recipes a page
+    /// spread evenly with their "+" outside the frame.
+    #[test]
+    fn the_recipe_screen_is_laid_out_as_jeis() {
+        use super::screen;
+        let g = screen::geom([570.0, 473.0], 10, 9, None, 3);
+        assert_eq!(g.panel, [186.0, 72.0, 198.0, 350.0]);
+        assert_eq!((g.tab_page, g.tab_pages), (1, 2));
+        assert_eq!(
+            g.tabs,
+            vec![
+                (8, [188.0, 51.0, 24.0, 24.0]),
+                (9, [212.0, 51.0, 24.0, 24.0])
+            ]
+        );
+        assert_eq!(g.tab_nav, [188.0, 29.0, 192.0, 20.0]);
+        assert_eq!(g.prev_tab, [192.0, 76.0, 13.0, 13.0]);
+        assert_eq!(g.next_tab, [365.0, 76.0, 13.0, 13.0]);
+        assert_eq!(g.title_bar, [205.0, 76.0, 160.0, 13.0]);
+        assert_eq!(g.page_bar, [205.0, 91.0, 160.0, 13.0]);
+        assert_eq!(g.content, [186.0, 104.0, 198.0, 318.0]);
+        assert_eq!(g.catalyst_panel, [164.0, 72.0, 28.0, 60.0]);
+        assert_eq!(g.catalysts[1], [170.0, 94.0, 16.0, 16.0]);
+        // A short GUI: 175 tall at the least, under the tabs.
+        let short = screen::geom([427.0, 200.0], 1, 0, None, 0);
+        assert_eq!(short.panel, [114.0, 45.0, 198.0, 175.0]);
+
+        let view = super::View {
+            layout: super::Layout::Grid,
+            width: 2,
+            height: 2,
+            slots: vec![vec![super::Stack::item("minecraft:oak_planks")]; 4],
+            results: vec![super::Stack::item("minecraft:crafting_table")],
+            note: String::new(),
+            shapeless: false,
+            action: Some(true),
+            chances: Vec::new(),
+        };
+        let views = vec![view; 9];
+        let pages = screen::pages(&views, g.content);
+        assert_eq!(
+            pages.iter().map(Vec::len).collect::<Vec<_>>(),
+            vec![4, 4, 1]
+        );
+        let at = screen::layout(&views, &pages[0], g.content);
+        assert_eq!(at[0], (0, [227.0, 124.0]));
+        assert_eq!(at[1], (1, [227.0, 198.0]));
+        let placed = screen::place(&views[0], &pages[0][0], at[0].1, g.content[2]);
+        assert_eq!(placed.background, screen::Background::Crafting);
+        // The 2x2 recipe in the 3x3 grid's corner, the result in the big slot.
+        assert_eq!(
+            placed.slots[3],
+            (screen::Part::Input(3), [245.0, 142.0, 18.0, 18.0])
+        );
+        assert_eq!(
+            placed.slots[4],
+            (screen::Part::Result(0), [321.0, 142.0, 18.0, 18.0])
+        );
+        assert_eq!(placed.button, Some([349.0, 165.0, 13.0, 13.0]));
     }
 
     #[test]
@@ -3266,7 +3497,7 @@ mod tests {
     }
 
     #[test]
-    fn bookmarks_hold_twenty_four() {
+    fn bookmarks_hold_a_long_list() {
         let mut bookmarks = super::Bookmarks::default();
         for n in 0..super::BOOKMARKS_MAX {
             let item = super::Stack::item(&format!("minecraft:item_{n}"));
@@ -3346,26 +3577,28 @@ mod tests {
     }
 
     #[test]
-    fn the_bar_holds_two_columns_of_slots() {
-        let bar = super::bookmark_bar(240.0);
-        assert_eq!(bar.columns, 2);
-        assert_eq!(bar.rows, 12);
-        assert_eq!(bar.capacity(), super::BOOKMARKS_MAX);
-        assert_eq!(bar.slot(0), [4.0, 4.0, 18.0, 18.0]);
-        assert_eq!(bar.slot(1), [22.0, 4.0, 18.0, 18.0]);
-        assert_eq!(bar.slot(2), [4.0, 22.0, 18.0, 18.0]);
-        // A short screen shows fewer rows, never none.
-        assert_eq!(super::bookmark_bar(100.0).rows, 5);
-        assert_eq!(super::bookmark_bar(10.0).rows, 1);
-        // The slots under a point, only as many as there are bookmarks.
-        let bar = super::bookmark_bar(240.0);
-        assert_eq!(bar.hit([5.0, 5.0], 3), Some(0));
-        assert_eq!(bar.hit([23.0, 5.0], 3), Some(1));
-        assert_eq!(bar.hit([23.0, 5.0], 1), None);
-        assert_eq!(bar.hit([3.0, 5.0], 3), None);
-        assert_eq!(bar.hit([5.0, 23.0], 0), None);
-        assert_eq!(bar.rect(), [4.0, 4.0, 36.0, 216.0]);
-        assert_eq!(super::bookmark_bar(240.0).capacity(), 24);
+    fn bookmarks_fill_the_left_of_the_window_as_jeis() {
+        // A 570x473 GUI with the inventory's window at x 197.
+        let area = super::bookmark_area([570.0, 473.0], 197.0);
+        // 193 pixels wide: ten columns flush with the left edge, under the
+        // page row; the list's button in the bottom left corner.
+        assert_eq!(area.columns, 10);
+        assert_eq!(area.nav, [2.0, 2.0, 180.0, 20.0]);
+        assert_eq!(area.button, [2.0, 449.0, 20.0, 20.0]);
+        // 469 tall less the row and the button's 24: 23 rows, centred.
+        assert_eq!((area.rows, area.origin), (23, [2.0, 27.0]));
+        assert_eq!(area.slot(11), [20.0, 45.0, 18.0, 18.0]);
+        assert_eq!(area.nav_buttons()[1], [162.0, 2.0, 20.0, 20.0]);
+        // Pages of 230, and the hits on the second one.
+        assert_eq!(area.pages(231), 2);
+        assert_eq!(area.hit([3.0, 29.0], 1, 231), Some(230));
+        assert_eq!(area.hit([21.0, 29.0], 1, 231), None);
+        assert_eq!(area.hit([1.0, 29.0], 0, 231), None);
+        // No room for 80 pixels: no grid, still the button.
+        let narrow = super::bookmark_area([570.0, 473.0], 70.0);
+        assert_eq!((narrow.columns, narrow.per_page()), (0, 0));
+        assert_eq!(narrow.hit([3.0, 29.0], 0, 5), None);
+        assert_eq!(narrow.button[1], 449.0);
     }
 
     #[test]

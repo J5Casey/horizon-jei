@@ -19,8 +19,11 @@ content/jei/assets/jei/textures/gui/sprites/ holds the GUI sprites of
 JustEnoughItems for Minecraft 1.12 (the `1.12` branch at commit
 4f70a47889e97f72d2c344fead75e1065c60e13a, src/main/resources/assets/jei/
 textures/gui/sprites/), unchanged, under JEI's MIT License (copied beside them
-as license-jei.txt). JEI's gui_vanilla.png is not included: it is cut from
-Minecraft's own textures.
+as license-jei.txt). The `icons/*_on`, `*_off` and `*_hover` copies are
+JEI's icons tinted as JEI tints them on its buttons (#E0E0E0, #A0A0A0,
+#FFFFA0). JEI's gui_vanilla.png is not included: it is cut from Minecraft's
+own textures, so the recipe screen draws the crafting table's and furnace's
+backgrounds from the player's own game files at run time.
 
 This is an unofficial port. It is not made, endorsed or supported by mezz, the
 JEI team, Mojang, Microsoft, or the Horizon project.

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.2.2-braid.2: JEI 1.12's look
+
+Jack's packs (Enigmatica 2 Expert, Divine Journey 2, Project Ozone 3) ran JEI 4.x
+and HEI on 1.12.2; the screens now follow its source (`RecipesGui`,
+`IngredientListOverlay`, `BookmarkOverlay`) number for number:
+
+- **The recipe screen** is JEI's `RecipesGui`: 198 wide and as tall as the GUI
+  less 68 (175 to 350), the vanilla darkened background over the screen under
+  it, two header rows of small buttons with the category's name and "1/4" in
+  white on dark bars, the tabs in pages of eight (a "1/2" row over them when
+  there are more), the catalysts' column fused to its left edge, and the
+  recipes spread down it with even room, each in its frame. Crafting recipes
+  sit on the crafting table's own grid, arrow and big result slot, 2x2 ones in
+  its corner, with JEI's shapeless icon; cooking recipes on the furnace's
+  (smoker's, blast furnace's) with the flame and arrow burning, time and XP at
+  the top right. Those backgrounds come from the player's own game files.
+  The "+" is JEI's small button outside the frame at the bottom right, its
+  icons tinted as JEI tints them; the slot under the pointer lights.
+- **The item list** is JEI's overlay (Horizon's `NativePanelStyle::Classic`):
+  flush with the screen's right edge, its "1/45" row of page buttons always
+  there (they wrap around), the search bar at the foot of the screen with
+  JEI's wrench beside it (red in cheat mode; it opens the settings page), red
+  search text when nothing matches. The search bar sits under the screen's
+  window (JEI's "center search bar"), or under the list: "Search bar" on the
+  settings page. With the recipe screen open the list makes room for it, and
+  the screen under it shows no tooltips.
+- **Bookmarks** are JEI's left list: from the screen's left edge to the
+  window, their own "1/1" page row, as many columns as fit, and the ribbon
+  button in the bottom left corner that shows or hides them. They stay over
+  the recipe screen. The file now holds up to 1024.
+- Needs Horizon's `NativePanelStyle::Classic`: this build pins J5Casey/horizon
+  `braid/panel-classic` (main `a3bf653` and that change).
+
 ## 0.2.2-braid.1: Braid's build on horizon-rust/horizon main
 
 The unreleased recipe screen and "+" below, plus Horizon's recipe viewer API
