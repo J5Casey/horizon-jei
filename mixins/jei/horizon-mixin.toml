@@ -10,7 +10,8 @@ priority = 100
 # names hook points 411 instead (compatibility.json "hooks") and builds on any
 # Horizon at least that new.
 [compatibility]
-horizon_revision = "7dec4d6afd66c261e05a1f389f908926fba13e91"
+# Pinned to J5Casey braid/dev7 (a3bf653 + arismoko/horizon#2588 + the panel_style Classic PR) until those reach upstream.
+horizon_revision = "2a7cd670294f69c572008bf37a7bfaf97626b011"
 
 # runtime.rs becomes the module crate::game::jei.
 [[module]]
