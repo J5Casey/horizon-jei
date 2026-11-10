@@ -8,7 +8,7 @@ use crate::game::jei::{
 };
 use crate::game::native_hooks::{
     NativePanelEvent, NativeRecipeKind, NativeRecipeLayout, NativeRecipeStack, NativeRecipeView,
-    NativeRecipes, NativeScreenView, NativeStack,
+    NativeRecipes, NativeScreenView, NativeStack, NativeTransferCheck,
 };
 use horizon_client::items::ItemStack;
 use std::cell::RefCell;
@@ -120,6 +120,15 @@ impl State {
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::new());
+    /// The server's dry run of the "+" under the pointer (`native_transfer_check`):
+    /// the recipe the last frame drew it on, and the latest answer for it.
+    static CHECK: RefCell<Check> = RefCell::new(Check::default());
+}
+
+#[derive(Default)]
+struct Check {
+    hovered: Option<i32>,
+    answer: Option<(i32, NativeTransferCheck)>,
 }
 
 /// The folder the mod keeps its files in, `config/jei/`, inside the game's.
@@ -300,6 +309,11 @@ pub(super) fn flush(game: &mut Game<'_>) {
     for event in pending {
         dispatch(game, event);
     }
+    // The "+" under the pointer: the server tries it (the chests beside a
+    // crafting station counted) and says what lacks; asked again as things change.
+    let hovered = CHECK.with(|c| c.borrow_mut().hovered.take());
+    let answer = hovered.and_then(|book| game.native_transfer_check(book).map(|a| (book, a)));
+    CHECK.with(|c| c.borrow_mut().answer = answer);
 }
 
 /// The panel's events: search, clicks, keys, tabs, pages and the action button.
@@ -871,7 +885,11 @@ fn available(game: &Game<'_>) -> Option<Vec<Stack>> {
         return None;
     }
     let cells = (game.craft_size * game.craft_size).min(game.craft_grid.len());
-    let stacks = game.inventory.iter().take(36).chain(&game.craft_grid[..cells]);
+    let stacks = game
+        .inventory
+        .iter()
+        .take(36)
+        .chain(&game.craft_grid[..cells]);
     Some(
         stacks
             .flatten()
@@ -884,12 +902,46 @@ fn available(game: &Game<'_>) -> Option<Vec<Stack>> {
     )
 }
 
-/// The inputs of `view` the player lacks, when its "+" is on (else none).
-fn lacking(view: &View, have: Option<&[Stack]>) -> Vec<usize> {
-    match (view.action, have) {
-        (Some(true), Some(have)) => jei::missing_slots(&view.slots, have),
-        _ => Vec::new(),
+/// The server's answer for the "+" of recipe `book`, when it has one.
+fn server_check(book: Option<i32>) -> Option<NativeTransferCheck> {
+    let book = book?;
+    CHECK.with(|c| {
+        (c.borrow().answer.as_ref())
+            .filter(|(b, _)| *b == book)
+            .map(|(_, a)| a.clone())
+    })
+}
+
+/// The inputs of `view` the player lacks, when its "+" is on (else none):
+/// the server's word when it has one, as it counts what the client can't see
+/// (a crafting station's chests), else the client's count on a vanilla grid.
+fn lacking(view: &View, have: Option<&[Stack]>, check: Option<&NativeTransferCheck>) -> Vec<usize> {
+    if view.action != Some(true) {
+        return Vec::new();
     }
+    match (check, have) {
+        (Some(check), _) if check.result == 1 => {
+            let filled = |i: &usize| view.slots.get(*i).is_some_and(|s| !s.is_empty());
+            let cells: Vec<usize> = (check.missing.iter())
+                .map(|&i| i as usize)
+                .filter(filled)
+                .collect();
+            if cells.is_empty() {
+                // Missing, but no cell this view shows: all of them.
+                (0..view.slots.len()).filter(filled).collect()
+            } else {
+                cells
+            }
+        }
+        (Some(_), _) => Vec::new(),
+        (None, Some(have)) => jei::missing_slots(&view.slots, have),
+        (None, None) => Vec::new(),
+    }
+}
+
+/// The recipe book display id of the shown recipe `view`.
+fn view_book(view: usize) -> Option<i32> {
+    STATE.with(|s| s.borrow().viewer().and_then(|v| v.shown_book(view)))
 }
 
 /// The crafting grid of the screen drawn last: 0 when none takes recipes.
@@ -1845,6 +1897,12 @@ fn draw_overlay(
     let content = overlay_content(overlay, &g);
     let have = available(game);
     let mut lacks_hovered = false;
+    let hovered_book = match &hit {
+        Some(Hit::Plus(v, true)) => view_book(*v),
+        _ => None,
+    };
+    CHECK.with(|c| c.borrow_mut().hovered = hovered_book);
+    let check = server_check(hovered_book);
     if let Some(pieces) = pages.get(page) {
         for (n, at) in geo::layout(&overlay.views, pieces, content) {
             let piece = &pieces[n];
@@ -1866,8 +1924,12 @@ fn draw_overlay(
                 );
             }
             draw_background(game, batch, overlay, view, &placed);
-            let lacks = lacking(view, have.as_deref());
             let plus_hovered = matches!(hit, Some(Hit::Plus(v, _)) if v == piece.view);
+            let lacks = lacking(
+                view,
+                have.as_deref(),
+                check.as_ref().filter(|_| plus_hovered),
+            );
             lacks_hovered |= plus_hovered && !lacks.is_empty();
             if let Some(rect) = placed.shapeless
                 && !whole(game, batch, "icons/shapeless_icon", rect)
@@ -2131,10 +2193,11 @@ fn overlay_pressed(
     let plus_ready = match hit {
         Hit::Plus(view, true) => {
             let have = available(game);
+            let check = server_check(view_book(view));
             STATE.with(|s| {
                 let state = s.borrow();
                 let view = state.overlay.as_ref().and_then(|o| o.views.get(view));
-                view.is_none_or(|v| lacking(v, have.as_deref()).is_empty())
+                view.is_none_or(|v| lacking(v, have.as_deref(), check.as_ref()).is_empty())
             })
         }
         _ => false,

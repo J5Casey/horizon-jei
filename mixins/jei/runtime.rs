@@ -1949,6 +1949,12 @@ impl Viewer {
     }
 
     /// The player's event.
+    /// The recipe book display id of the shown page's recipe `view`, which
+    /// its "+" transfers: none for a recipe without one.
+    pub fn shown_book(&self, view: usize) -> Option<i32> {
+        self.shown.get(view).copied().filter(|&book| book >= 0)
+    }
+
     pub fn handle(&mut self, event: Event, ctx: &Context<'_>) -> Vec<Out> {
         match event {
             Event::Search(text) => {
