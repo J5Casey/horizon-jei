@@ -858,6 +858,40 @@ pub(super) fn clear_bookmarks() {
     });
 }
 
+/// What a "+" takes from, as JEI counts it: the inventory's 36 slots and the
+/// open crafting grid, as the game shows them to the client. None on a mod's
+/// crafting grid, which can take from sources the client doesn't list.
+fn available(game: &Game<'_>) -> Option<Vec<Stack>> {
+    let vanilla = STATE.with(|s| {
+        s.borrow().screen.as_ref().is_some_and(|(id, menu)| {
+            *id == "inventory" && matches!(menu.as_deref(), None | Some("minecraft:crafting"))
+        })
+    });
+    if !vanilla {
+        return None;
+    }
+    let cells = (game.craft_size * game.craft_size).min(game.craft_grid.len());
+    let stacks = game.inventory.iter().take(36).chain(&game.craft_grid[..cells]);
+    Some(
+        stacks
+            .flatten()
+            .map(|s| Stack {
+                item: s.item.to_string(),
+                count: s.count,
+                components: crate::game::native_recipes::components(s),
+            })
+            .collect(),
+    )
+}
+
+/// The inputs of `view` the player lacks, when its "+" is on (else none).
+fn lacking(view: &View, have: Option<&[Stack]>) -> Vec<usize> {
+    match (view.action, have) {
+        (Some(true), Some(have)) => jei::missing_slots(&view.slots, have),
+        _ => Vec::new(),
+    }
+}
+
 /// The crafting grid of the screen drawn last: 0 when none takes recipes.
 fn open_grid() -> u32 {
     STATE.with(|s| {
@@ -1216,6 +1250,9 @@ const NOTE: u32 = 0x80_80_80;
 /// JEI's bars between the header's buttons, its slot highlight.
 const BAR: u32 = 0x30_00_00_00;
 const LIT: u32 = 0x7F_FF_FF_FF;
+/// JEI's red: over the slots a "+" lacks, and over its button.
+const MISSING_SLOT: u32 = 0x66_FF_00_00;
+const MISSING_BUTTON: u32 = 0x80_FF_00_00;
 const LIST_LIT: u32 = 0x80_FF_FF_FF;
 /// Vanilla's `drawDefaultBackground` over the world: its top and bottom.
 const SHADE: [u32; 2] = [0xC0_10_10_10, 0xD0_10_10_10];
@@ -1806,6 +1843,8 @@ fn draw_overlay(
     }
 
     let content = overlay_content(overlay, &g);
+    let have = available(game);
+    let mut lacks_hovered = false;
     if let Some(pieces) = pages.get(page) {
         for (n, at) in geo::layout(&overlay.views, pieces, content) {
             let piece = &pieces[n];
@@ -1827,6 +1866,9 @@ fn draw_overlay(
                 );
             }
             draw_background(game, batch, overlay, view, &placed);
+            let lacks = lacking(view, have.as_deref());
+            let plus_hovered = matches!(hit, Some(Hit::Plus(v, _)) if v == piece.view);
+            lacks_hovered |= plus_hovered && !lacks.is_empty();
             if let Some(rect) = placed.shapeless
                 && !whole(game, batch, "icons/shapeless_icon", rect)
             {
@@ -1839,6 +1881,14 @@ fn draw_overlay(
                 };
                 if let Some(stack) = stack {
                     draw_stack(game, batch, stack, *rect);
+                }
+                // JEI marks what the "+" lacks while the pointer is on it.
+                if plus_hovered && matches!(part, geo::Part::Input(i) if lacks.contains(i)) {
+                    game.native_fill(
+                        batch,
+                        [rect[0] + 1.0, rect[1] + 1.0, 16.0, 16.0],
+                        MISSING_SLOT,
+                    );
                 }
                 if jei::inside(mouse, *rect) && stack.is_some() {
                     game.native_fill(batch, [rect[0] + 1.0, rect[1] + 1.0, 16.0, 16.0], LIT);
@@ -1863,7 +1913,11 @@ fn draw_overlay(
             }
             if let (Some(rect), Some(on)) = (placed.button, view.action) {
                 let hovered = hit == Some(Hit::Plus(piece.view, on));
+                let on = on && lacks.is_empty();
                 button_box(game, batch, rect, "recipe_transfer", on, hovered);
+                if !lacks.is_empty() {
+                    game.native_fill(batch, rect, MISSING_BUTTON);
+                }
             }
             let notes = !view.note.is_empty()
                 && !view.shapeless
@@ -1972,6 +2026,7 @@ fn draw_overlay(
             view,
             output,
         }) => overlay_stack_lines(game, overlay, stack, *view, *output),
+        Some(Hit::Plus(..)) if lacks_hovered => vec![format!("§c{}", lang.missing_hint())],
         Some(Hit::Plus(_, on)) => vec![format!("§f{}", lang.transfer_hint(*on))],
         Some(Hit::Shapeless) => vec![format!("§f{}", lang.shapeless_hint())],
         Some(Hit::Tab(i)) => overlay
@@ -2072,6 +2127,18 @@ fn overlay_pressed(
         return;
     };
     *canceled = true;
+    // A "+" that lacks items does nothing, as JEI's.
+    let plus_ready = match hit {
+        Hit::Plus(view, true) => {
+            let have = available(game);
+            STATE.with(|s| {
+                let state = s.borrow();
+                let view = state.overlay.as_ref().and_then(|o| o.views.get(view));
+                view.is_none_or(|v| lacking(v, have.as_deref()).is_empty())
+            })
+        }
+        _ => false,
+    };
     STATE.with(|s| {
         let mut state = s.borrow_mut();
         state.overlay_pressed = true;
@@ -2115,7 +2182,7 @@ fn overlay_pressed(
                     uses: button == 1,
                 });
             }
-            Hit::Plus(view, true) if button == 0 => {
+            Hit::Plus(view, true) if button == 0 && plus_ready => {
                 // JEI moves the items and goes back to the screen they went to.
                 state.pending.push(Event::Action(view, shift));
                 state.pending.push(Event::Close);

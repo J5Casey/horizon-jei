@@ -203,6 +203,14 @@ impl Lang {
         }
     }
 
+    /// The "+" button's tooltip when the player lacks ingredients (JEI's).
+    pub fn missing_hint(self) -> &'static str {
+        match self {
+            Lang::En => "Missing Items",
+            Lang::Es => "Faltan objetos",
+        }
+    }
+
     /// The shapeless icon's tooltip, as JEI's.
     pub fn shapeless_hint(self) -> &'static str {
         match self {
@@ -1455,6 +1463,31 @@ pub fn dedupe_recipes(recipes: Vec<Recipe>) -> Vec<Recipe> {
         }
     }
     out
+}
+
+/// The input slots of a recipe the player can't fill from `have`, as JEI's
+/// "+" finds them: each slot in turn takes the first stack that is one of
+/// its ingredients, by item and subtype (a worn or renamed tool still
+/// counts), and uses up that ingredient's count of it.
+pub fn missing_slots(slots: &[Vec<Stack>], have: &[Stack]) -> Vec<usize> {
+    let mut left: Vec<Stack> = have.to_vec();
+    let mut missing = Vec::new();
+    for (i, slot) in slots.iter().enumerate() {
+        if slot.is_empty() {
+            continue;
+        }
+        let found = slot.iter().find_map(|want| {
+            let need = want.count.max(1);
+            left.iter()
+                .position(|s| same(s, want) && s.count >= need)
+                .map(|k| (k, need))
+        });
+        match found {
+            Some((k, need)) => left[k].count -= need,
+            None => missing.push(i),
+        }
+    }
+    missing
 }
 
 /// The same item, and the same subtype when `want` has one.
@@ -2993,6 +3026,31 @@ mod tests {
             &ctx,
         );
         assert!(matches!(&out[0], super::Out::Give { count: 99, .. }));
+    }
+
+    #[test]
+    fn missing_slots_count_what_each_slot_uses() {
+        use super::{Stack, missing_slots};
+        let log = |n: u32| Stack {
+            count: n,
+            ..Stack::item("minecraft:oak_log")
+        };
+        let rod = Stack::item("void_fishing:twine_rod");
+        let worn = Stack {
+            components: "[minecraft:damage=40]".into(),
+            ..rod.clone()
+        };
+        let slots = vec![vec![log(1)], vec![], vec![log(1)], vec![rod.clone()]];
+        assert_eq!(
+            missing_slots(&slots, &[log(2), worn.clone()]),
+            Vec::<usize>::new()
+        );
+        assert_eq!(missing_slots(&slots, &[log(1), worn]), vec![2]);
+        assert_eq!(missing_slots(&slots, &[log(1), log(1)]), vec![3]);
+        assert_eq!(missing_slots(&slots, &[]), vec![0, 2, 3]);
+        // Either alternative fills a slot; an empty one never misses.
+        let either = vec![vec![rod.clone(), log(1)]];
+        assert!(missing_slots(&either, &[log(5)]).is_empty());
     }
 
     #[test]

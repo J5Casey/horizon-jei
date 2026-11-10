@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: what the "+" lacks
+
+- **Missing items in red**, as JEI's: with the pointer on a "+", the inputs the player lacks (inventory and the open
+  crafting grid counted, a worn or renamed tool included) turn red, the button shows JEI's red disabled state, its
+  tooltip says "Missing Items", and a click does nothing. A mod's crafting grid, which can also take from chests
+  beside it, keeps the plain "+".
+- A worn Twine Rod still moved nothing into a Copper-Reel Rod's grid: Horizon's viewer transfer kept the recipe
+  book's rule (`isUsableForCrafting`, no damaged, enchanted or renamed items). Fixed in Horizon on J5Casey
+  braid/dev9 (`e643ca7`); checked in game with the Braid mods all pinned there.
+
 ## 0.2.2-braid.2: JEI 1.12's look
 
 Jack's packs (Enigmatica 2 Expert, Divine Journey 2, Project Ozone 3) ran JEI 4.x
