@@ -2452,6 +2452,8 @@ pub(super) fn lookup(
                 );
             }
         }
+        // For lookups a newer Horizon adds; the current one has only these three.
+        #[allow(unreachable_patterns)]
         _ => return,
     }
     *handled = true;
