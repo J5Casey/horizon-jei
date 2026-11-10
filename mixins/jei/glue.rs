@@ -8,7 +8,7 @@ use crate::game::jei::{
 };
 use crate::game::native_hooks::{
     NativePanelEvent, NativeRecipeKind, NativeRecipeLayout, NativeRecipeStack, NativeRecipeView,
-    NativeRecipes, NativeScreenView, NativeStack, NativeTransferCheck,
+    NativeRecipes, NativeScreenView, NativeStack, RecipeTransferCheck, RecipeTransferResult,
 };
 use horizon_client::items::ItemStack;
 use std::cell::RefCell;
@@ -120,7 +120,7 @@ impl State {
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::new());
-    /// The server's dry run of the "+" under the pointer (`native_transfer_check`):
+    /// The server's check of the "+" under the pointer (`native_transfer_recipe_check`):
     /// the recipe the last frame drew it on, and the latest answer for it.
     static CHECK: RefCell<Check> = RefCell::new(Check::default());
 }
@@ -128,7 +128,7 @@ thread_local! {
 #[derive(Default)]
 struct Check {
     hovered: Option<i32>,
-    answer: Option<(i32, NativeTransferCheck)>,
+    answer: Option<(i32, RecipeTransferCheck)>,
 }
 
 /// The folder the mod keeps its files in, `config/jei/`, inside the game's.
@@ -312,7 +312,8 @@ pub(super) fn flush(game: &mut Game<'_>) {
     // The "+" under the pointer: the server tries it (the chests beside a
     // crafting station counted) and says what lacks; asked again as things change.
     let hovered = CHECK.with(|c| c.borrow_mut().hovered.take());
-    let answer = hovered.and_then(|book| game.native_transfer_check(book).map(|a| (book, a)));
+    let answer =
+        hovered.and_then(|book| game.native_transfer_recipe_check(book).map(|a| (book, a)));
     CHECK.with(|c| c.borrow_mut().answer = answer);
 }
 
@@ -903,7 +904,7 @@ fn available(game: &Game<'_>) -> Option<Vec<Stack>> {
 }
 
 /// The server's answer for the "+" of recipe `book`, when it has one.
-fn server_check(book: Option<i32>) -> Option<NativeTransferCheck> {
+fn server_check(book: Option<i32>) -> Option<RecipeTransferCheck> {
     let book = book?;
     CHECK.with(|c| {
         (c.borrow().answer.as_ref())
@@ -915,14 +916,14 @@ fn server_check(book: Option<i32>) -> Option<NativeTransferCheck> {
 /// The inputs of `view` the player lacks, when its "+" is on (else none):
 /// the server's word when it has one, as it counts what the client can't see
 /// (a crafting station's chests), else the client's count on a vanilla grid.
-fn lacking(view: &View, have: Option<&[Stack]>, check: Option<&NativeTransferCheck>) -> Vec<usize> {
+fn lacking(view: &View, have: Option<&[Stack]>, check: Option<&RecipeTransferCheck>) -> Vec<usize> {
     if view.action != Some(true) {
         return Vec::new();
     }
     match (check, have) {
-        (Some(check), _) if check.result == 1 => {
+        (Some(check), _) if check.result == RecipeTransferResult::Missing => {
             let filled = |i: &usize| view.slots.get(*i).is_some_and(|s| !s.is_empty());
-            let cells: Vec<usize> = (check.missing.iter())
+            let cells: Vec<usize> = (check.missing_cells.iter())
                 .map(|&i| i as usize)
                 .filter(filled)
                 .collect();

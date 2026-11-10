@@ -5,11 +5,13 @@
 - **Missing items in red**, as JEI's: with the pointer on a "+", the inputs the player lacks (inventory and the open
   crafting grid counted, a worn or renamed tool included) turn red, the button shows JEI's red disabled state, its
   tooltip says "Missing Items", and a click does nothing.
-- **The server's word on the "+"**: with the pointer on a "+", the server tries the transfer and undoes it
-  (Horizon's `native_transfer_check`, J5Casey braid/dev10) and the red follows its answer, so a Crafting
-  Station's "+" counts the chests beside it, as the transfer itself does (and later any network storage a mod
-  lends the grid). The answer is asked again as the inventory changes and once a second while the pointer
-  stays; until it comes, a vanilla grid shows the client's own count and a mod's grid the plain "+".
+- **The server's word on the "+"**: with the pointer on a "+", the server works out the transfer on a copy of
+  the menu without moving anything (Horizon's `native_transfer_recipe_check`, J5Casey braid/dev11, the
+  typed API of arismoko/horizon#2833) and the red follows its answer, so a Crafting Station's "+" counts the
+  chests beside it, as the transfer itself does (and later any network storage a mod lends the grid). The
+  answer is asked again as the inventory changes and every 2 s while the pointer stays (at most 15 times
+  for one state of the menu); until it comes, a vanilla grid shows the client's own count and a mod's grid
+  the plain "+".
 - A worn Twine Rod still moved nothing into a Copper-Reel Rod's grid: Horizon's viewer transfer kept the recipe
   book's rule (`isUsableForCrafting`, no damaged, enchanted or renamed items). Fixed in Horizon on J5Casey
   braid/dev9 (`e643ca7`); checked in game with the Braid mods all pinned there.
