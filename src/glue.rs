@@ -684,6 +684,15 @@ pub fn command(host: &mut dyn ClientHost, command: &str) -> bool {
     }
     if args.trim() == "debug" {
         // The "+"'s wiring: the shown recipes' book ids and the server's last check.
+        let probe: Vec<String> = [
+            "minecraft:stick",
+            "minecraft:stick_from_bamboo_item",
+            "minecraft:chest",
+        ]
+        .iter()
+        .map(|id| format!("{id}={:?}", host.recipe_book_ids(id)))
+        .collect();
+        say(host, &format!("JEI debug: now {}", probe.join(" ")));
         let text = with(|s| {
             let books: Vec<Option<i32>> = (0..8)
                 .map(|v| s.viewer().and_then(|viewer| viewer.shown_book(v)))

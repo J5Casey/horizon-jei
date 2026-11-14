@@ -504,7 +504,6 @@ fn token_hits(item: &SearchItem<'_>, token: &Query) -> bool {
 pub const SYNCED_RECIPE_TYPES: &[&str] = &[
     "minecraft:crafting_shaped",
     "minecraft:crafting_shapeless",
-    "minecraft:crafting_transmute",
     "minecraft:smelting",
     "minecraft:blasting",
     "minecraft:smoking",
