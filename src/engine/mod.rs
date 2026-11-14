@@ -499,11 +499,13 @@ fn token_hits(item: &SearchItem<'_>, token: &Query) -> bool {
 }
 
 /// Items the panel takes, and the most recipes a page shows.
-/// The recipe types the viewer asks the server for (`native_datapack_sync`):
+/// The recipe types the viewer would ask the server for (`datapack_sync`, off
+/// while Horizon's synced book numbers recipes unlike the server):
 /// the kinds it shows, as the recipe files name them.
 pub const SYNCED_RECIPE_TYPES: &[&str] = &[
     "minecraft:crafting_shaped",
     "minecraft:crafting_shapeless",
+    "minecraft:crafting_transmute",
     "minecraft:smelting",
     "minecraft:blasting",
     "minecraft:smoking",
