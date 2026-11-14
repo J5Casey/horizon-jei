@@ -11,6 +11,6 @@ capabilities = ["registries"]
 
 [native]
 game = "26.3"
-# J5Casey/horizon braid/ari-base: arismoko/horizon main a58d266c35 + recipe_book_ids (a local developer base).
-horizon = "fca6b6cb4cc66e0c08edc85f2697998c43b9654e"
+# J5Casey/horizon braid/ari-base: arismoko/horizon main a58d266c35 + recipe_book_ids (#4249), a local developer base.
+horizon = "d30c56e24b20927f8ade6be7eb373d878ef69dbb"
 mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"

@@ -65,6 +65,8 @@ struct State {
     categories: Option<u64>,
     /// Each item's key, for drawing it.
     keys: HashMap<String, ItemKey>,
+    /// The recipe each book id of the catalog names (`catalog::Catalog::books`).
+    books: HashMap<i32, String>,
     /// The "+" under the pointer: the recipe the last frame drew it on, and
     /// the server's latest answer for it (`transfer_recipe_check`).
     hovered_book: Option<i32>,
@@ -117,6 +119,7 @@ impl State {
             to_bookmark: Vec::new(),
             categories: None,
             keys: HashMap::new(),
+            books: HashMap::new(),
             hovered_book: None,
             answer: None,
         }
@@ -279,8 +282,20 @@ pub fn frame(host: &mut dyn ClientHost) {
     // The "+" under the pointer: the server tries it (the chests beside a
     // crafting station counted) and says what lacks; asked again as things change.
     let hovered = with(|s| s.hovered_book.take());
-    let answer = hovered.and_then(|book| host.transfer_recipe_check(book).map(|a| (book, a)));
+    let answer = hovered.and_then(|book| {
+        let now = current_book(host, book);
+        host.transfer_recipe_check(now).map(|a| (book, a))
+    });
     with(|s| s.answer = answer);
+}
+
+/// The book id recipe `book` (an id of the catalog's) has now: a recipe the
+/// player learns since takes the server's number.
+fn current_book(host: &mut dyn ClientHost, book: i32) -> i32 {
+    let Some(id) = with(|s| s.books.get(&book).cloned()) else {
+        return book;
+    };
+    host.recipe_book_ids(&id).first().copied().unwrap_or(book)
 }
 
 /// The viewer from the world's tables, and the item list in the panel.
@@ -300,6 +315,7 @@ fn build(host: &mut dyn ClientHost) {
         s.session.set_viewer(viewer);
         s.categories = None;
         s.keys = catalog.keys;
+        s.books = catalog.books;
         s.panel_style = None;
     });
     refresh_categories();
@@ -528,6 +544,7 @@ fn apply(host: &mut dyn ClientHost, out: Out) -> Result<(), String> {
         Out::Transfer { book_id, all: _ } => {
             // One set: the mod API's transfer has no "as many as the items
             // allow" yet (Shift on "+").
+            let book_id = current_book(host, book_id);
             host.transfer_recipe(book_id);
             Ok(())
         }

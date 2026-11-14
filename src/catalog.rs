@@ -25,6 +25,9 @@ pub struct Catalog {
     pub items: Vec<Item>,
     pub recipes: Vec<Recipe>,
     pub keys: HashMap<String, ItemKey>,
+    /// Each crafting recipe's book id as it was when the catalog was made,
+    /// and the recipe it names (the "+" asks for the id again when it acts).
+    pub books: HashMap<i32, String>,
 }
 
 /// `minecraft:` for a bare id, as vanilla reads one.
@@ -131,6 +134,7 @@ pub fn build(host: &mut dyn ClientHost) -> Option<Catalog> {
         .collect();
     let b = Builder { index: &index };
     let mut recipes = Vec::new();
+    let mut books = HashMap::new();
     let mut tags = Vec::new();
     for &(kind_id, kind) in TYPES {
         for r in host.recipes_of_type(kind_id).iter() {
@@ -213,6 +217,9 @@ pub fn build(host: &mut dyn ClientHost) -> Option<Catalog> {
             }
             if kind.station() == crate::engine::Station::Crafting {
                 recipe.book_id = host.recipe_book_ids(&r.id).first().copied().unwrap_or(-1);
+                if recipe.book_id >= 0 {
+                    books.insert(recipe.book_id, r.id.clone());
+                }
             }
             recipes.push(recipe);
         }
@@ -239,5 +246,6 @@ pub fn build(host: &mut dyn ClientHost) -> Option<Catalog> {
         items,
         recipes,
         keys: by_id,
+        books,
     })
 }
