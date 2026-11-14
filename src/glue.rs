@@ -665,6 +665,17 @@ pub fn command(host: &mut dyn ClientHost, command: &str) -> bool {
     if !(args.is_empty() || args.starts_with(' ')) {
         return false;
     }
+    if args.trim() == "debug" {
+        // The "+"'s wiring: the shown recipes' book ids and the server's last check.
+        let text = with(|s| {
+            let books: Vec<Option<i32>> = (0..8)
+                .map(|v| s.viewer().and_then(|viewer| viewer.shown_book(v)))
+                .collect();
+            format!("JEI debug: books {books:?}, check {:?}", s.answer)
+        });
+        say(host, &text);
+        return true;
+    }
     let Some(cmd) = jei::command(args) else {
         say(host, jei::COMMAND_USAGE);
         return true;
