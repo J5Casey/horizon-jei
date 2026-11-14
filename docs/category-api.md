@@ -72,8 +72,12 @@ All of them derive `Clone`, `Debug`, `PartialEq` and `Default` (except
 
 ```toml
 [dependencies]
-jei = { version = "^0.3", optional = true }
+jei = { version = "^0.3.0-braid.1", optional = true }
 ```
+
+The requirement is checked against JEI's `horizon-mod.toml` `version` with Cargo's semver rules,
+and that version is a pre-release (`0.3.0-braid.1`), which a plain `^0.3` does not match: name the
+pre-release.
 
 The launcher adds the path dependency and a `jei` Cargo feature itself; don't
 write them into `Cargo.toml` (arismoko/horizon `docs/modding/src/concepts/dependencies.md`).
@@ -123,12 +127,12 @@ mod_api::if_installed!(host, jei, {
 
 ## Who adopts it
 
-| Mod | Today (braid/dev12) | On this API |
+| Mod | Before (braid/dev12) | On this API (all four wired, braid/ari-base 9a4998a86c) |
 |---|---|---|
-| braid-salvage | `recipe_categories` hook: the bench's sifting drops | `set_category("salvage:sifting", ..)` on `recipes_received` |
-| braid-chisel | `recipe_categories`: one tab of chisel groups | `set_category("chisel:chiseling", ..)`, one recipe per group (inputs: the group's blocks; outputs: each at chance 1) |
-| braid-void-fishing | `recipe_categories`: the void's loot table | `set_category("void_fishing:void", ..)` from the table's odds |
-| braid-quests | `show_recipes(stack)` engine helper | `jei::api::show_recipes` / `show_uses` |
+| braid-salvage | `recipe_categories` hook: the bench's sifting drops | `set_category("salvage:salvaging", ..)` and `"salvage:hammering"` on the first server tick after a data load (the odds need a level) |
+| braid-chisel | `recipe_categories`: one tab of chisel groups | `set_category("chisel:chiseling", ..)` from the server's group load, one recipe per group (inputs: the group's blocks; outputs: each at chance 1) |
+| braid-void-fishing | `recipe_categories`: the void's loot table | Meditation, Matter, Dew Jar, Ember Crucible and the fishing odds pages, from `client_tick_post` whenever they change |
+| braid-quests | `show_recipes(stack)` engine helper | `jei::api::show_recipes` / `show_uses` (book clicks, R and U over items) |
 
 ## Limits (version 1)
 
