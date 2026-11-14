@@ -1926,16 +1926,20 @@ fn overlay_pressed(screen: &ScreenView<'_>, button: i32, modifiers: u32) -> bool
         }
         return !on_list;
     };
-    // A "+" that lacks items does nothing, as JEI's.
-    let plus_ready = match hit {
+    // A "+" that lacks items does nothing, as JEI's. Before the server has
+    // answered (a click in the frame the pointer arrived) it tries anyway and
+    // keeps the screen open: the server refuses a set it can't make.
+    let (plus_ready, plus_known) = match hit {
         Hit::Plus(view, true) => {
             let check = server_check(view_book(view));
-            with(|s| {
+            let known = check.is_some();
+            let ready = with(|s| {
                 let view = s.overlay.as_ref().and_then(|o| o.views.get(view));
                 view.is_none_or(|v| lacking(v, check.as_ref()).is_empty())
-            })
+            });
+            (ready, known)
         }
-        _ => false,
+        _ => (false, false),
     };
     with(|s| {
         s.overlay_pressed = true;
@@ -1980,7 +1984,9 @@ fn overlay_pressed(screen: &ScreenView<'_>, button: i32, modifiers: u32) -> bool
             Hit::Plus(view, true) if button == 0 && plus_ready => {
                 // JEI moves the items and goes back to the screen they went to.
                 s.pending.push(Event::Action(view, shift));
-                s.pending.push(Event::Close);
+                if plus_known {
+                    s.pending.push(Event::Close);
+                }
             }
             _ => {}
         }
