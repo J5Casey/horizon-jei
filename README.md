@@ -37,58 +37,50 @@ panel, the non-recipe categories (anvil, grindstone, compost, fuel), shift on
 searches. Some of those need new Horizon hooks; [`docs/roadmap.md`](docs/roadmap.md)
 lists them.
 
-## Install
+## Install (arismoko/horizon)
 
-From the registry: Mods → JEI → Install, then Settings → Game → Native mods
-(experimental) → Build, and play the **Native mods** instance.
+This branch (`arismoko`) is a flat native mod on the arismoko/horizon mod API:
+`horizon-mod.toml` pins the game build, the launcher compiles `src/` against
+that build's prebuilt SDK into the game. Braid installs it with
+`python3 -I tools/braid_mods.py --fork sync --build` (its `mods.toml` names
+this branch). By hand, pack the folder's `horizon-mod.toml`, `Cargo.toml`,
+`src/` and `assets/` into `jei.hmod`, put it in the game folder's
+`horizon-native-mods/` and run the fork launcher's
+`native-build --trust-native-code`.
 
-From a clone of this folder:
+The pin is a local developer base (J5Casey/horizon `braid/ari-base`:
+arismoko main plus `RecipesClientHost::recipe_book_ids`, which the "+" needs,
+arismoko/horizon issue #4249) until that is merged and published.
 
-```sh
-horizon-launcher native-build /path/to/horizon-jei/mixins/jei --trust-native-code
-```
+## For other mods: the category API
 
-The first build downloads Rust and takes 20-30 minutes; later builds recompile
-only the game. Native mods are not sandboxed: build only code you trust.
-
-## Releases
-
-A release is a `.hnmod` built from a commit of this repository with
-`native/tools/native.py package`, checked with `cargo horizon-mod check`, and
-signed with minisign. The public key is [`horizon-jei.pub`](horizon-jei.pub)
-(key id `FC3386F1F51ECF6A`); the private key is not in the repository, and
-every later version is signed with it, so nobody else can publish an update
-under this project's name. The signature of each release goes into the
-registry entry, not into this repository.
+JEI is also a library. A mod adds recipe categories (its own tab of
+inputs and chance outputs) and opens the viewer on a stack through
+`jei::api`, guarded with `mod_api::if_installed!(host, jei, ..)`. See
+[`docs/category-api.md`](docs/category-api.md).
 
 ## Develop
 
 ```sh
-cargo test                       # the mod's own logic, no game
-
-# From a clone of https://github.com/horizon-rust/horizon-mods:
-python3 native/tools/native.py check /path/to/horizon-jei
-python3 native/tools/native.py check /path/to/horizon-jei --horizon latest
-python3 native/tools/native.py package /path/to/horizon-jei
-cargo horizon-mod check native/target/jei-<version>.hnmod
+cd engine && cargo test          # the viewer's engine, no game
+mkdir -p .horizon/sdk && ln -s <horizon checkout at the pin> .horizon/sdk/api
+cargo clippy --all-targets -- -D warnings   # the whole mod, against the SDK
 ```
 
-In game: Options → Mods → JEI, and `/jei`, `/jei sort`, `/jei bookmarks clear`,
-`/jei config`.
+In game: Options > Mods > JEI (click gives items, language, tooltip hints,
+the search bar's place), the keys under Controls, and `/jei`, `/jei sort`,
+`/jei bookmarks clear`, `/jei config`.
 
 ## Layout
 
 ```
-Cargo.toml                 the mod's tests (lib = mixins/jei/runtime.rs)
-compatibility.json         game 26.3, hook points 313, the tested revision
-mixins/jei/
-  horizon-mixin.toml       the bundle: modules and HEAD hooks
-  runtime.rs               the core (becomes crate::game::jei)
-  glue.rs                  the game's tables and the panel in and out
-  screen_post.rs tooltip.rs mouse_press.rs mouse_release.rs mouse_drag.rs
-                           the overlay: the bar, its tooltip and its clicks
-  list.rs settings.rs click.rs command.rs event.rs frame.rs
-                           one helper per hook
+horizon-mod.toml   the manifest and the [native] pin
+src/lib.rs         the hooks
+src/glue.rs        the game's side: panel, overlay, input, tooltips, files
+src/catalog.rs     the game's items and recipes as the viewer takes them
+src/engine/        the viewer itself, no Horizon types (engine/ tests it)
+src/engine/api.rs  the library API other mods call
+assets/jei/        JEI 1.12's GUI sprites (MIT) and the lang file
 ```
 
 ## License

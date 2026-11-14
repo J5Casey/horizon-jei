@@ -1,8 +1,24 @@
+# JEI for Horizon: a native mod on the arismoko/horizon mod API. The launcher
+# compiles this crate against the prebuilt SDK of the commit horizon-mod.toml
+# pins. The SDK dependency must be this exact path (E_SDK_SOURCE on main's
+# launcher). For a local developer base, link a checkout of the pin:
+#   mkdir -p .horizon/sdk && ln -s <checkout> .horizon/sdk/api
+# The viewer's engine and its tests run without it (engine/).
+#
+# The package (and so the library other mods call) is `jei`: a mod that
+# declares `jei` under [dependencies] in its horizon-mod.toml reaches the
+# category API in `jei::api` (docs/category-api.md).
 [package]
 name = "jei"
-version = "0.2.2-braid.2"
+version = "0.3.0"
 edition = "2024"
+license = "MIT"
+description = "An item and recipe viewer for Horizon, a port of Just Enough Items"
 publish = false
+autotests = false
 
 [lib]
-path = "mixins/jei/runtime.rs"
+path = "src/lib.rs"
+
+[dependencies]
+horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api" }

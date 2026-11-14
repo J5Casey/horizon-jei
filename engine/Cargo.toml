@@ -1,0 +1,13 @@
+# The viewer's engine (src/engine/, no Horizon types) built on its own, so its
+# tests run with plain `cargo test` and no SDK. Not part of the .hmod.
+[package]
+name = "jei-engine"
+version = "0.3.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+path = "../src/engine/mod.rs"
+
+[workspace]

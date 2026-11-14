@@ -1,21 +1,15 @@
-// JEI for Horizon: an item and recipe viewer built on Horizon's native hook
-// points. This file is both the mod's Cargo library (its tests run with
-// `cargo test`) and the module the bundle adds to the game as crate::game::jei.
-//
-// Phase 0: the bundle's skeleton. It registers its row in Options > Mods, a
-// settings page with one toggle, and the /jei command, to prove the wiring
-// before the viewer itself (tasks 1.x and 2.x in tasks/todo.md).
+// JEI for Horizon's engine: the viewer itself (items, search, recipes, pages,
+// bookmarks, the recipe screen's geometry) with no Horizon types, so its tests
+// run with plain `cargo test` in engine/. The mod (src/lib.rs, src/glue.rs)
+// feeds it the game's tables and draws what it says.
+
+pub mod api;
 
 /// The mod's id: its row, its settings folder and its keys.
 pub const ID: &str = "jei";
 pub const NAME: &str = "JEI";
-pub const VERSION: &str = "0.2.2-braid.2";
+pub const VERSION: &str = "0.3.0-braid.1";
 pub const DESCRIPTION: &str = "An item and recipe viewer: every item beside container screens, with search, recipes, uses and bookmarks.";
-
-/// The hook points' version this build needs: the newest point it hooks
-/// (`native_gui_draw_item_with` and `native_gui_tooltip`, API 411). It builds
-/// on any Horizon at least that new.
-pub const HOOKS: u32 = 411;
 
 /// Its keys: name, label and default (the Java mod's R and U, and A for a
 /// bookmark).
@@ -33,7 +27,7 @@ pub fn title() -> String {
 
 /// The line `/jei` says in chat.
 pub fn about() -> String {
-    format!("{NAME} {VERSION} (alpha) on hook points version {HOOKS}")
+    format!("{NAME} {VERSION} (alpha) on the arismoko/horizon mod API")
 }
 
 /// The line `/jei` says in a world: what the viewer holds.
@@ -2007,6 +2001,26 @@ impl Viewer {
     }
 }
 
+/// A shaped recipe's pattern (its rows' characters) with its empty rows and
+/// columns cut away, as the game shrinks it: its width, height and which
+/// cells hold something, row by row. None for an empty pattern.
+pub fn pattern(rows: &[Vec<char>]) -> Option<(u32, u32, Vec<bool>)> {
+    let used_row = |r: &Vec<char>| r.iter().any(|c| *c != ' ');
+    let top = rows.iter().position(used_row)?;
+    let bottom = rows.iter().rposition(used_row)?;
+    let width = rows.iter().map(Vec::len).max()?;
+    let used_col = |c: usize| rows.iter().any(|r| r.get(c).is_some_and(|ch| *ch != ' '));
+    let left = (0..width).find(|c| used_col(*c))?;
+    let right = (0..width).rev().find(|c| used_col(*c))?;
+    let mut cells = Vec::new();
+    for row in &rows[top..=bottom] {
+        for c in left..=right {
+            cells.push(row.get(c).is_some_and(|ch| *ch != ' '));
+        }
+    }
+    Some(((right - left + 1) as u32, (bottom - top + 1) as u32, cells))
+}
+
 /// Whether a crafting recipe fits a grid `grid` cells a side (JEI's "+" is
 /// red for a 3x3 recipe over the inventory's 2x2); no grid fits nothing.
 pub fn fits(recipe: &Recipe, grid: u32) -> bool {
@@ -2494,13 +2508,28 @@ impl Session {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn a_pattern_shrinks_as_the_game_shrinks_it() {
+        let rows =
+            |r: &[&str]| -> Vec<Vec<char>> { r.iter().map(|s| s.chars().collect()).collect() };
+        assert_eq!(
+            super::pattern(&rows(&["   ", " # ", " # "])),
+            Some((1, 2, vec![true, true]))
+        );
+        assert_eq!(
+            super::pattern(&rows(&["# #", " # "])),
+            Some((3, 2, vec![true, false, true, false, true, false]))
+        );
+        assert_eq!(super::pattern(&rows(&["   "])), None);
+    }
+
+    #[test]
     fn title_has_name_and_version() {
-        assert_eq!(super::title(), "JEI 0.2.2-braid.2");
+        assert_eq!(super::title(), "JEI 0.3.0-braid.1");
     }
 
     #[test]
     fn about_names_the_hook_points() {
-        assert!(super::about().contains("hook points version 411"));
+        assert!(super::about().contains("arismoko/horizon mod API"));
     }
 
     #[test]

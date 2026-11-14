@@ -1,0 +1,16 @@
+id = "jei"
+name = "JEI"
+version = "0.3.0-braid.1"
+description = "An item and recipe viewer: every item beside container screens, with search, recipes, uses, bookmarks and a \"+\" that fills the crafting grid. Other mods add recipe categories through its library API."
+authors = ["enderliker", "J5Casey"]
+# A native mod: Rust in src/, compiled by the launcher against the game build [native] pins, with
+# JEI 1.12's GUI sprites (MIT) in assets/.
+api = "0.2"
+side = "both"
+capabilities = ["registries"]
+
+[native]
+game = "26.3"
+# J5Casey/horizon braid/ari-base: arismoko/horizon main a58d266c35 + recipe_book_ids (a local developer base).
+horizon = "fca6b6cb4cc66e0c08edc85f2697998c43b9654e"
+mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"

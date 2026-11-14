@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "jei"
-version = "0.2.2-braid.2"
+name = "jei-engine"
+version = "0.3.0"

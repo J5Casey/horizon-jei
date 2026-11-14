@@ -1,0 +1,14 @@
+{
+  "jei.setting.give": "Click gives items",
+  "jei.setting.give.tooltip": "In creative, a click on the item list gives the item (right click: a stack). In survival it opens its recipes.",
+  "jei.setting.language": "Language",
+  "jei.language.en": "English",
+  "jei.language.es": "Español",
+  "jei.setting.hints": "Recipe hints in tooltips",
+  "jei.setting.hints.tooltip": "Item tooltips say how many recipes make and use the item (R and U).",
+  "jei.setting.centred_search": "Search bar under the window",
+  "jei.setting.centred_search.tooltip": "JEI's centred search bar: under the screen's window when there is room, else under the item list.",
+  "jei.key.recipe": "Show recipes",
+  "jei.key.uses": "Show uses",
+  "jei.key.bookmark": "Bookmark item"
+}
