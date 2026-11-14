@@ -23,12 +23,11 @@ pub use engine::api;
 
 use engine as jei;
 use mod_api::{
-    ClientHost, CommandEvent, DatapackSyncEvent, Flow, GuiRenderPostEvent, Hooks, ItemTooltipEvent,
-    KeyRegistration, PanelEventEvent, RecipesReceivedEvent, RegisterClientCommandsEvent, Registrar,
+    ClientHost, CommandEvent, Flow, GuiRenderPostEvent, Hooks, ItemTooltipEvent, KeyRegistration,
+    PanelEventEvent, RecipesReceivedEvent, RegisterClientCommandsEvent, Registrar,
     RegistrationContext, RenderFramePostEvent, RenderTooltipPreEvent, ScreenClosingEvent,
     ScreenKeyPressedPreEvent, ScreenMouseButtonPressedPreEvent, ScreenMouseButtonReleasedPreEvent,
-    ScreenMouseDraggedPreEvent, ScreenMouseScrolledPreEvent, ScreenRenderPostEvent, ServerHost,
-    SettingSpec,
+    ScreenMouseDraggedPreEvent, ScreenMouseScrolledPreEvent, ScreenRenderPostEvent, SettingSpec,
 };
 
 #[derive(Default)]
@@ -170,19 +169,13 @@ impl Hooks for Jei {
         flow(glue::command(host, event.command))
     }
 
-    /// The server is about to send a joining player its recipes: ask for the
-    /// types the viewer shows, so a data pack's recipes reach the viewer
-    /// (and its "+") as the server has them.
-    fn datapack_sync(&self, host: &mut dyn ServerHost, event: &mut DatapackSyncEvent<'_>) {
-        if !host.on(jei::ID) {
-            return;
-        }
-        for kind in jei::SYNCED_RECIPE_TYPES {
-            if !event.recipe_types.iter().any(|t| t == kind) {
-                event.recipe_types.push((*kind).to_owned());
-            }
-        }
-    }
+    // No `datapack_sync`: even with arismoko/horizon#4276 the window's recipe
+    // book numbers synced recipes one off from the server (on braid/ari-base
+    // 9a4998a86c, `recipe_book_ids("minecraft:stick")` is [1461, 1462] and the
+    // bamboo stick's [1462, 1463], while the server's planks stick is 1462), so
+    // the "+" moved the wrong recipe. The viewer shows the window's own recipes
+    // until Horizon numbers them like the server; the "+" still moves what the
+    // server's recipe of that id takes.
 
     fn recipes_received(&self, host: &mut dyn ClientHost, _event: &mut RecipesReceivedEvent<'_>) {
         if host.on(jei::ID) {
