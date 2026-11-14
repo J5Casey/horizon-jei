@@ -127,7 +127,7 @@ mod_api::if_installed!(host, jei, {
 
 ## Who adopts it
 
-| Mod | Before (braid/dev12) | On this API (all four wired, braid/ari-base 9a4998a86c) |
+| Mod | Before (braid/dev12) | On this API (all four wired, braid/ari-base 86c2820370) |
 |---|---|---|
 | braid-salvage | `recipe_categories` hook: the bench's sifting drops | `set_category("salvage:salvaging", ..)` and `"salvage:hammering"` on the first server tick after a data load (the odds need a level) |
 | braid-chisel | `recipe_categories`: one tab of chisel groups | `set_category("chisel:chiseling", ..)` from the server's group load, one recipe per group (inputs: the group's blocks; outputs: each at chance 1) |
