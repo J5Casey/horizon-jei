@@ -11,7 +11,7 @@
 //!
 //! It is also a library: other mods add recipe categories and open the
 //! viewer through [`api`] (`docs/category-api.md`).
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod catalog;
 pub mod engine;
