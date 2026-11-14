@@ -3,11 +3,11 @@ id = "jei"
 version = "0.2.1"
 priority = 100
 
-# The commit this bundle was tested on (Nightly 2026-11-07). It hooks only the
+# The commit this bundle was tested on (Nightly 2026-11-13, 9f42064). It hooks only the
 # native hook points, so the launcher builds it on any Horizon whose hook
 # points are version 313 or later (compatibility.json, "hooks").
 [compatibility]
-horizon_revision = "6560641ba51a452f6bc2407baa4eb1b3be517ca8"
+horizon_revision = "9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0"
 
 # runtime.rs becomes the module crate::game::jei.
 [[module]]
