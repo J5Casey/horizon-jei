@@ -1000,10 +1000,15 @@ pub fn gui_render_post(host: &dyn ClientHost, d: &mut dyn DrawContext) {
     if !host.on(jei::ID) {
         return;
     }
+    // Out of the state while it draws: drawing reads the state too.
+    let Some(overlay) = with(|s| s.overlay.take()) else {
+        return;
+    };
     let mut p = Paint { host, d };
-    STATE.with(|s| {
-        if let Some(overlay) = s.borrow().overlay.as_ref() {
-            draw_overlay(&mut p, &at, overlay);
+    draw_overlay(&mut p, &at, &overlay);
+    with(|s| {
+        if s.overlay.is_none() {
+            s.overlay = Some(overlay);
         }
     });
 }
