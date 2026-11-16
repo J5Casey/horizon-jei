@@ -282,20 +282,33 @@ pub fn frame(host: &mut dyn ClientHost) {
     // The "+" under the pointer: the server tries it (the chests beside a
     // crafting station counted) and says what lacks; asked again as things change.
     let hovered = with(|s| s.hovered_book.take());
-    let answer = hovered.and_then(|book| {
-        let now = current_book(host, book);
-        host.transfer_recipe_check(now).map(|a| (book, a))
+    let answer = hovered.and_then(|book| match current_book(host, book) {
+        Plus::Book(now) => host.transfer_recipe_check(now).map(|a| (book, a)),
+        // The check goes by book id: none for a recipe the book doesn't hold.
+        Plus::Recipe(_) => None,
     });
     with(|s| s.answer = answer);
 }
 
-/// The book id recipe `book` (an id of the catalog's) has now: a recipe the
-/// player learns since takes the server's number.
-fn current_book(host: &mut dyn ClientHost, book: i32) -> i32 {
+/// What the "+" of recipe `book` (an id of the catalog's) goes by now.
+enum Plus {
+    /// The book id: the catalog's, or the server's number of a recipe the
+    /// player learned since.
+    Book(i32),
+    /// The recipe's id, for one the player's book doesn't hold: on Sunrise
+    /// `recipe_book_ids` gives only the numbers the server sent.
+    Recipe(String),
+}
+
+fn current_book(host: &mut dyn ClientHost, book: i32) -> Plus {
     let Some(id) = with(|s| s.books.get(&book).cloned()) else {
-        return book;
+        return Plus::Book(book);
     };
-    host.recipe_book_ids(&id).first().copied().unwrap_or(book)
+    match host.recipe_book_ids(&id).first() {
+        Some(&now) => Plus::Book(now),
+        None if book < crate::catalog::UNBOOKED => Plus::Book(book),
+        None => Plus::Recipe(id),
+    }
 }
 
 /// The viewer from the world's tables, and the item list in the panel.
@@ -541,11 +554,13 @@ fn apply(host: &mut dyn ClientHost, out: Out) -> Result<(), String> {
             Ok(())
         }
         Out::Give { item, count } => give_item(host, &item, count),
-        Out::Transfer { book_id, all: _ } => {
-            // One set: the mod API's transfer has no "as many as the items
-            // allow" yet (Shift on "+").
-            let book_id = current_book(host, book_id);
-            host.transfer_recipe(book_id);
+        Out::Transfer { book_id, all } => {
+            match current_book(host, book_id) {
+                // One set: `transfer_recipe` has no "as many as the items
+                // allow" (Shift on "+").
+                Plus::Book(book_id) => host.transfer_recipe(book_id),
+                Plus::Recipe(id) => host.transfer_recipe_id(&id, all),
+            }
             Ok(())
         }
         Out::Say(text) => {

@@ -5,8 +5,9 @@
 //! Every item lists beside container screens (`panel_items`, drawn in JEI
 //! 1.12's classic look by `panel_style`); R and U over a stack open JEI's
 //! recipe screen over the open screen, where "+" fills the crafting grid
-//! (`transfer_recipe`, the recipe's id from `recipe_book_ids`) and marks in
-//! red what the server says it lacks (`transfer_recipe_check`). Bookmarks,
+//! (`transfer_recipe`, the recipe's id from `recipe_book_ids`, or
+//! `transfer_recipe_id` for a recipe the player's book doesn't hold) and marks
+//! in red what the server says it lacks (`transfer_recipe_check`). Bookmarks,
 //! tooltip hints, `/jei` and the settings on its page in Options > Mods.
 //!
 //! It is also a library: other mods add recipe categories and open the

@@ -1,32 +1,56 @@
 //! The game's tables as the viewer takes them: every item (id, name, the
 //! tags the recipes name) and the vanilla recipe kinds it shows, from
 //! `item_keys` and `recipes_of_type`, with each crafting recipe's book id
-//! (`recipe_book_ids`) for its "+".
+//! (`recipe_book_ids`) for its "+", or an id of the catalog's ([`UNBOOKED`]
+//! and up) for one the player's book doesn't hold.
 
 use crate::engine::{Ingredient, Item, Kind, Recipe};
 use mod_api::{ClientHost, Identifier, ItemKey};
 use std::collections::{BTreeMap, HashMap};
 
-/// The recipe types the viewer shows, and the kind each is.
-const TYPES: &[(&str, Kind)] = &[
-    ("minecraft:crafting_shaped", Kind::CraftingShaped),
-    ("minecraft:crafting_shapeless", Kind::CraftingShapeless),
-    ("minecraft:smelting", Kind::Smelting),
-    ("minecraft:blasting", Kind::Blasting),
-    ("minecraft:smoking", Kind::Smoking),
-    ("minecraft:campfire_cooking", Kind::Campfire),
-    ("minecraft:stonecutting", Kind::Stonecutting),
-    ("minecraft:smithing_transform", Kind::Smithing),
-    ("minecraft:smithing_trim", Kind::Smithing),
+/// The recipe types the viewer reads (`recipes_of_type` takes a recipe's
+/// type, not its file's serializer: every crafting serializer is
+/// `minecraft:crafting`, both smithing ones `minecraft:smithing`), and
+/// `kind` names the kind of each recipe from its file's `type`.
+const TYPES: &[&str] = &[
+    "minecraft:crafting",
+    "minecraft:smelting",
+    "minecraft:blasting",
+    "minecraft:smoking",
+    "minecraft:campfire_cooking",
+    "minecraft:stonecutting",
+    "minecraft:smithing",
 ];
+
+/// The kind a recipe file's serializer (`type`) shows as, or None for one
+/// the viewer doesn't draw (special crafting, transmute).
+fn kind(serializer: &str) -> Option<Kind> {
+    Some(match serializer {
+        "minecraft:crafting_shaped" => Kind::CraftingShaped,
+        "minecraft:crafting_shapeless" => Kind::CraftingShapeless,
+        "minecraft:smelting" => Kind::Smelting,
+        "minecraft:blasting" => Kind::Blasting,
+        "minecraft:smoking" => Kind::Smoking,
+        "minecraft:campfire_cooking" => Kind::Campfire,
+        "minecraft:stonecutting" => Kind::Stonecutting,
+        "minecraft:smithing_transform" | "minecraft:smithing_trim" => Kind::Smithing,
+        _ => return None,
+    })
+}
+
+/// The first of the ids the catalog gives a crafting recipe the player's book
+/// doesn't hold (`recipe_book_ids` is empty for it): above any book id, so its
+/// "+" goes by the recipe's id (`transfer_recipe_id`) instead.
+pub const UNBOOKED: i32 = 1 << 24;
 
 /// The items and recipes, and each item's key for drawing.
 pub struct Catalog {
     pub items: Vec<Item>,
     pub recipes: Vec<Recipe>,
     pub keys: HashMap<String, ItemKey>,
-    /// Each crafting recipe's book id as it was when the catalog was made,
-    /// and the recipe it names (the "+" asks for the id again when it acts).
+    /// Each crafting recipe's book id as it was when the catalog was made (or
+    /// its [`UNBOOKED`] id), and the recipe it names (the "+" asks for the id
+    /// again when it acts).
     pub books: HashMap<i32, String>,
 }
 
@@ -136,8 +160,12 @@ pub fn build(host: &mut dyn ClientHost) -> Option<Catalog> {
     let mut recipes = Vec::new();
     let mut books = HashMap::new();
     let mut tags = Vec::new();
-    for &(kind_id, kind) in TYPES {
-        for r in host.recipes_of_type(kind_id).iter() {
+    let mut unbooked = UNBOOKED;
+    for &type_id in TYPES {
+        for r in host.recipes_of_type(type_id).iter() {
+            let Some(kind) = r.json.get("type").and_then(|t| t.as_str()).and_then(kind) else {
+                continue;
+            };
             tags_named(&r.json.to_string(), &mut tags);
             let mut recipe = Recipe {
                 kind,
@@ -216,10 +244,14 @@ pub fn build(host: &mut dyn ClientHost) -> Option<Catalog> {
                 continue;
             }
             if kind.station() == crate::engine::Station::Crafting {
-                recipe.book_id = host.recipe_book_ids(&r.id).first().copied().unwrap_or(-1);
-                if recipe.book_id >= 0 {
-                    books.insert(recipe.book_id, r.id.clone());
-                }
+                recipe.book_id = match host.recipe_book_ids(&r.id).first() {
+                    Some(&book) => book,
+                    None => {
+                        unbooked += 1;
+                        unbooked - 1
+                    }
+                };
+                books.insert(recipe.book_id, r.id.clone());
             }
             recipes.push(recipe);
         }

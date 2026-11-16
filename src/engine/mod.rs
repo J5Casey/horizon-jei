@@ -500,19 +500,17 @@ fn token_hits(item: &SearchItem<'_>, token: &Query) -> bool {
 
 /// Items the panel takes, and the most recipes a page shows.
 /// The recipe types the viewer asks the server for (`datapack_sync`): the
-/// kinds it shows, as the recipe files name them, and transmute, so the
-/// window's crafting recipes are all the server's.
+/// types it shows, as `recipes_of_type` names them (every crafting serializer,
+/// transmute included, is `minecraft:crafting`), so the window's recipes of
+/// those types are all the server's and the book numbers them as it does.
 pub const SYNCED_RECIPE_TYPES: &[&str] = &[
-    "minecraft:crafting_shaped",
-    "minecraft:crafting_shapeless",
-    "minecraft:crafting_transmute",
+    "minecraft:crafting",
     "minecraft:smelting",
     "minecraft:blasting",
     "minecraft:smoking",
     "minecraft:campfire_cooking",
     "minecraft:stonecutting",
-    "minecraft:smithing_transform",
-    "minecraft:smithing_trim",
+    "minecraft:smithing",
 ];
 
 pub const ITEMS_MAX: usize = 8192;

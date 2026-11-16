@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased: Sunrise's recipe types
+
+- **Crafting recipes were missing on Sunrise**, and with them the "+": Sunrise's `recipes_of_type` and
+  `datapack_sync` take a recipe's type, not its file's serializer (`minecraft:crafting` for every crafting
+  serializer, `minecraft:smithing` for both smithing ones), so asking for `minecraft:crafting_shaped` gave
+  nothing and the server never sent its crafting recipes. The viewer now asks for the types and sorts each
+  recipe by its file's `type`. With the server's crafting recipes synced, `recipe_book_ids` agrees with the
+  server's book again.
+- **"+" for a recipe the player's book doesn't hold** goes by the recipe's id (`transfer_recipe_id`, Shift
+  moves as many sets as the items allow): Sunrise's `recipe_book_ids` gives only the numbers the server
+  sent, which is the player's book. The server's check (`transfer_recipe_check`) goes by book id, so the
+  red "Missing Items" shows for recipes in the book only.
+
 ## Unreleased: what the "+" lacks
 
 - **Missing items in red**, as JEI's: with the pointer on a "+", the inputs the player lacks (inventory and the open
