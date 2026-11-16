@@ -1,5 +1,5 @@
-// JEI for Horizon's engine: the viewer itself (items, search, recipes, pages,
-// bookmarks, the recipe screen's geometry) with no Horizon types, so its tests
+// JEI for Sunrise's engine: the viewer itself (items, search, recipes, pages,
+// bookmarks, the recipe screen's geometry) with no game types, so its tests
 // run with plain `cargo test` in engine/. The mod (src/lib.rs, src/glue.rs)
 // feeds it the game's tables and draws what it says.
 
@@ -27,7 +27,7 @@ pub fn title() -> String {
 
 /// The line `/jei` says in chat.
 pub fn about() -> String {
-    format!("{NAME} {VERSION} (alpha) on the arismoko/horizon mod API")
+    format!("{NAME} {VERSION} (alpha) on the Sunrise mod API")
 }
 
 /// The line `/jei` says in a world: what the viewer holds.
@@ -2530,7 +2530,7 @@ mod tests {
 
     #[test]
     fn about_names_the_hook_points() {
-        assert!(super::about().contains("arismoko/horizon mod API"));
+        assert!(super::about().contains("Sunrise mod API"));
     }
 
     #[test]

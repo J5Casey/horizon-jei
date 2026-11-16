@@ -1,4 +1,4 @@
-//! The edges between Horizon and the viewer (`crate::engine`): the game's
+//! The edges between Sunrise and the viewer (`crate::engine`): the game's
 //! item and recipe tables in, the panel, give and transfer out, and the
 //! overlay (tooltips, the bookmark bar, the recipe screen and their clicks)
 //! wired to the viewer.
@@ -48,7 +48,7 @@ struct State {
     last_at: Option<ScreenAt>,
     /// The bookmark list's page.
     bookmark_page: usize,
-    /// The item list's look last asked of Horizon (`panel_style`).
+    /// The item list's look last asked of Sunrise (`panel_style`).
     panel_style: Option<PanelStyle>,
     /// The server's recipes arrived (`recipes_received`): build the viewer
     /// again from them.
@@ -1103,7 +1103,7 @@ fn cheat_wrench(p: &mut Paint<'_>, row: [f32; 4], mouse: [f32; 2]) {
 }
 
 /// The item list's left edge and the search box's row (with its settings
-/// button), as Horizon lays out JEI's classic panel beside `window` (the
+/// button), as Sunrise lays out JEI's classic panel beside `window` (the
 /// screen's window, `[x, y, w, h]`) with the recipe screen open; None for a
 /// screen with no item list.
 fn panel_parts(
@@ -1112,7 +1112,7 @@ fn panel_parts(
     centred_search: bool,
     window_width: f32,
 ) -> Option<(f32, [f32; 4])> {
-    // Horizon shows a mod's list beside the containers, not the creative screen.
+    // Sunrise shows a mod's list beside the containers, not the creative screen.
     if screen.id != "inventory" {
         return None;
     }

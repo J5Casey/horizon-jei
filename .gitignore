@@ -4,6 +4,6 @@ __pycache__/
 *.pyc
 # The signing key never enters the repository; the public half does.
 *.key
-.horizon/
+.sunrise/
 # The SDK-resolved lock of local checks; the mod has no registry dependencies to pin.
 /Cargo.lock

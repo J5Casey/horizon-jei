@@ -1,5 +1,5 @@
-//! JEI for Horizon: an item and recipe viewer, a port of Just Enough Items,
-//! as a native mod on the arismoko/horizon mod API (`horizon-mod-api`, lib
+//! JEI for Sunrise: an item and recipe viewer, a port of Just Enough Items,
+//! as a native mod on the Sunrise mod API (`sunrise-mod-api`, lib
 //! `mod_api`).
 //!
 //! Every item lists beside container screens (`panel_items`, drawn in JEI
@@ -43,7 +43,7 @@ fn toggle(key: &str, default: bool) -> SettingSpec {
         .tooltip(format!("jei.setting.{key}.tooltip"))
 }
 
-#[mod_api::horizon_mod]
+#[mod_api::sunrise_mod]
 impl Hooks for Jei {
     fn register(&self, r: &mut dyn Registrar, _cx: &RegistrationContext) {
         let settings = [

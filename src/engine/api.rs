@@ -1,10 +1,10 @@
 //! JEI's library API: what other mods call to add recipe categories to the
 //! viewer and to open it on a stack. See `docs/category-api.md`.
 //!
-//! A mod declares JEI as an optional dependency in its `horizon-mod.toml`
+//! A mod declares JEI as an optional dependency in its `sunrise-mod.toml`
 //! (`[dependencies] jei = { version = "^0.3", optional = true }`) and calls
 //! these under `mod_api::if_installed!(host, jei, { .. })`, so it builds and
-//! runs without JEI too. Every call is plain data in, nothing out: no Horizon
+//! runs without JEI too. Every call is plain data in, nothing out: no game
 //! type crosses the boundary, so a JEI update that keeps these signatures
 //! never breaks a caller.
 //!

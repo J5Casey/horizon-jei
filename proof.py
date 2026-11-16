@@ -5,7 +5,7 @@ import json
 import time
 from game import Game, difference
 
-DATA = "horizon-mods/.horizon-mod-data/jei"
+DATA = "sunrise-mods/.sunrise-mod-data/jei"
 SLOT = 18
 
 
@@ -30,7 +30,7 @@ def search_box(g, stone):
 
 
 def type_text(g, text, previous=""):
-    """Type into the focused field; `horizon-ctl type` clears one character per `\\b`."""
+    """Type into the focused field; `sunrise-ctl type` clears one character per `\\b`."""
     for _ in range(len(previous)):
         g.run("type", "\\b")
     if text:

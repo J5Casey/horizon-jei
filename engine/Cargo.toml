@@ -1,4 +1,4 @@
-# The viewer's engine (src/engine/, no Horizon types) built on its own, so its
+# The viewer's engine (src/engine/, no game types) built on its own, so its
 # tests run with plain `cargo test` and no SDK. Not part of the .hmod.
 [package]
 name = "jei-engine"

@@ -1,8 +1,8 @@
-JEI for Horizon
+JEI for Sunrise
 ===============
 
 This mod is a port of JustEnoughItems (JEI), a Minecraft item and recipe viewer,
-to Horizon. JEI is:
+to Sunrise. JEI is:
 
   Copyright (c) 2014-2015 mezz
   Licensed under the MIT License.
@@ -26,8 +26,8 @@ own textures, so the recipe screen draws the crafting table's and furnace's
 backgrounds from the player's own game files at run time.
 
 This is an unofficial port. It is not made, endorsed or supported by mezz, the
-JEI team, Mojang, Microsoft, or the Horizon project.
+JEI team, Mojang, Microsoft, or the Sunrise project.
 
-Horizon is a Rust reimplementation of Minecraft: Java Edition. Minecraft is a
+Sunrise is a Rust reimplementation of Minecraft: Java Edition. Minecraft is a
 trademark of Mojang Synergies AB. This mod contains no Minecraft code or assets;
 it reads the game's own files at run time.

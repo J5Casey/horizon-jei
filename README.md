@@ -1,9 +1,9 @@
-# JEI for Horizon
+# JEI for Sunrise
 
-An item and recipe viewer for [Horizon](https://playhorizon.dev), the Rust
+An item and recipe viewer for Sunrise, the Rust
 reimplementation of Minecraft: Java Edition 26.3. It is a port of
 [JustEnoughItems](https://github.com/mezz/JustEnoughItems) (JEI), rebuilt on
-Horizon's native hook points.
+Sunrise's native hook points.
 
 Status: **0.2.1 "Overlay and bookmarks"**. On top of 0.1's panel viewer (every
 item, JEI's search grammar, R/U over any stack, a tab per station, recipe
@@ -34,23 +34,22 @@ against JEI.
 Not there yet: click on a container slot (only R/U), the creative inventory
 panel, the non-recipe categories (anvil, grindstone, compost, fuel), shift on
 "+", recipe transfer into furnaces, and the `$tooltip` / `%creative tab`
-searches. Some of those need new Horizon hooks; [`docs/roadmap.md`](docs/roadmap.md)
+searches. Some of those need new Sunrise hooks; [`docs/roadmap.md`](docs/roadmap.md)
 lists them.
 
-## Install (arismoko/horizon)
+## Install (Sunrise)
 
-This branch (`arismoko`) is a flat native mod on the arismoko/horizon mod API:
-`horizon-mod.toml` pins the game build, the launcher compiles `src/` against
+This branch (`sunrise`) is a flat native mod on the Sunrise mod API:
+`sunrise-mod.toml` pins the game build, the launcher compiles `src/` against
 that build's prebuilt SDK into the game. Braid installs it with
-`python3 -I tools/braid_mods.py --fork sync --build` (its `mods.toml` names
-this branch). By hand, pack the folder's `horizon-mod.toml`, `Cargo.toml`,
+`python3 -I tools/braid_mods.py --sunrise sync --build` (its `mods.toml` names
+this branch). By hand, pack the folder's `sunrise-mod.toml`, `Cargo.toml`,
 `src/` and `assets/` into `jei.hmod`, put it in the game folder's
-`horizon-native-mods/` and run the fork launcher's
+`sunrise-native-mods/` and run the Sunrise launcher's
 `native-build --trust-native-code`.
 
-The pin is a local developer base (J5Casey/horizon `braid/ari-base`:
-arismoko main plus `RecipesClientHost::recipe_book_ids`, which the "+" needs,
-arismoko/horizon issue #4249) until that is merged and published.
+The pin is a local developer base (J5Casey/sunrise `braid/sun-base`: Sunrise
+main plus sunrise#1390 and #1404) until that is published.
 
 ## For other mods: the category API
 
@@ -63,7 +62,7 @@ inputs and chance outputs) and opens the viewer on a stack through
 
 ```sh
 cd engine && cargo test          # the viewer's engine, no game
-mkdir -p .horizon/sdk && ln -s <horizon checkout at the pin> .horizon/sdk/api
+mkdir -p .sunrise/sdk && ln -s <sunrise checkout at the pin> .sunrise/sdk/api
 cargo clippy --all-targets -- -D warnings   # the whole mod, against the SDK
 ```
 
@@ -74,11 +73,11 @@ the search bar's place), the keys under Controls, and `/jei`, `/jei sort`,
 ## Layout
 
 ```
-horizon-mod.toml   the manifest and the [native] pin
+sunrise-mod.toml   the manifest and the [native] pin
 src/lib.rs         the hooks
 src/glue.rs        the game's side: panel, overlay, input, tooltips, files
 src/catalog.rs     the game's items and recipes as the viewer takes them
-src/engine/        the viewer itself, no Horizon types (engine/ tests it)
+src/engine/        the viewer itself, no game types (engine/ tests it)
 src/engine/api.rs  the library API other mods call
 assets/jei/        JEI 1.12's GUI sprites (MIT) and the lang file
 ```
@@ -86,4 +85,4 @@ assets/jei/        JEI 1.12's GUI sprites (MIT) and the lang file
 ## License
 
 MIT. See `LICENSE` and `NOTICE` (attribution to JEI, © mezz).
-Not affiliated with mezz, Mojang, Microsoft or the Horizon project.
+Not affiliated with mezz, Mojang, Microsoft or the Sunrise project.

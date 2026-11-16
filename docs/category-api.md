@@ -3,12 +3,12 @@
 JEI shows the vanilla recipe kinds itself. Any other mod's recipes (a sieve's
 drops, a fishing loot table, chisel groups) reach it through JEI's library
 API: JEI publishes plain functions from its crate root, and a mod that wants
-a tab calls them. This replaces Horizon's old engine-side `recipe_categories`
-hook, which arismoko/horizon retired. Nothing here needs an engine change.
+a tab calls them. This replaces the old engine-side `recipe_categories`
+hook, which Sunrise retired. Nothing here needs an engine change.
 
 The API lives in [`src/engine/api.rs`](../src/engine/api.rs) (re-exported as
-`jei::api`). It has no Horizon types: every argument is JEI's own plain data,
-so a mod's call keeps building across JEI and Horizon updates while these
+`jei::api`). It has no game types: every argument is JEI's own plain data,
+so a mod's call keeps building across JEI and Sunrise updates while these
 signatures hold. Version 1 (`jei::api::API_VERSION`):
 
 ```rust
@@ -68,19 +68,19 @@ All of them derive `Clone`, `Debug`, `PartialEq` and `Default` (except
 
 ## Calling it from another mod
 
-`horizon-mod.toml`:
+`sunrise-mod.toml`:
 
 ```toml
 [dependencies]
 jei = { version = "^0.3.0-braid.1", optional = true }
 ```
 
-The requirement is checked against JEI's `horizon-mod.toml` `version` with Cargo's semver rules,
+The requirement is checked against JEI's `sunrise-mod.toml` `version` with Cargo's semver rules,
 and that version is a pre-release (`0.3.0-braid.1`), which a plain `^0.3` does not match: name the
 pre-release.
 
 The launcher adds the path dependency and a `jei` Cargo feature itself; don't
-write them into `Cargo.toml` (arismoko/horizon `docs/modding/src/concepts/dependencies.md`).
+write them into `Cargo.toml` (Sunrise `docs/modding/src/concepts/dependencies.md`).
 Then, in the mod, guard every call so it builds and runs without JEI:
 
 ```rust
