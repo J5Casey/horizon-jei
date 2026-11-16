@@ -20,8 +20,9 @@ use mod_api::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-/// Variants one item adds to the list (potions, tipped arrows).
-const VARIANTS_PER_ITEM: usize = 8;
+/// Variants one item adds to the list (potions, tipped arrows): enough for
+/// every potion the brewing recipes name, as JEI lists them all.
+const VARIANTS_PER_ITEM: usize = 64;
 
 /// Shift's GLFW bit.
 const SHIFT: u32 = 1;
@@ -65,7 +66,7 @@ struct State {
     categories: Option<u64>,
     /// Each item's key, for drawing it.
     keys: HashMap<String, ItemKey>,
-    /// The recipe each book id of the catalog names (`catalog::Catalog::books`).
+    /// The recipe each "+" id of the catalog names (`catalog::Catalog::books`).
     books: HashMap<i32, String>,
     /// The "+" under the pointer: the recipe the last frame drew it on, and
     /// the server's latest answer for it (`transfer_recipe_check`).
@@ -282,33 +283,16 @@ pub fn frame(host: &mut dyn ClientHost) {
     // The "+" under the pointer: the server tries it (the chests beside a
     // crafting station counted) and says what lacks; asked again as things change.
     let hovered = with(|s| s.hovered_book.take());
-    let answer = hovered.and_then(|book| match current_book(host, book) {
-        Plus::Book(now) => host.transfer_recipe_check(now).map(|a| (book, a)),
-        // The check goes by book id: none for a recipe the book doesn't hold.
-        Plus::Recipe(_) => None,
+    let answer = hovered.and_then(|book| {
+        let id = recipe_of(book)?;
+        host.transfer_recipe_check(&id).map(|a| (book, a))
     });
     with(|s| s.answer = answer);
 }
 
-/// What the "+" of recipe `book` (an id of the catalog's) goes by now.
-enum Plus {
-    /// The book id: the catalog's, or the server's number of a recipe the
-    /// player learned since.
-    Book(i32),
-    /// The recipe's id, for one the player's book doesn't hold: on Sunrise
-    /// `recipe_book_ids` gives only the numbers the server sent.
-    Recipe(String),
-}
-
-fn current_book(host: &mut dyn ClientHost, book: i32) -> Plus {
-    let Some(id) = with(|s| s.books.get(&book).cloned()) else {
-        return Plus::Book(book);
-    };
-    match host.recipe_book_ids(&id).first() {
-        Some(&now) => Plus::Book(now),
-        None if book < crate::catalog::UNBOOKED => Plus::Book(book),
-        None => Plus::Recipe(id),
-    }
+/// The recipe the "+" of `book` (an id of the catalog's) names.
+fn recipe_of(book: i32) -> Option<String> {
+    with(|s| s.books.get(&book).cloned())
 }
 
 /// The viewer from the world's tables, and the item list in the panel.
@@ -555,11 +539,10 @@ fn apply(host: &mut dyn ClientHost, out: Out) -> Result<(), String> {
         }
         Out::Give { item, count } => give_item(host, &item, count),
         Out::Transfer { book_id, all } => {
-            match current_book(host, book_id) {
-                // One set: `transfer_recipe` has no "as many as the items
-                // allow" (Shift on "+").
-                Plus::Book(book_id) => host.transfer_recipe(book_id),
-                Plus::Recipe(id) => host.transfer_recipe_id(&id, all),
+            // By the recipe's id, learned or not; `all` (Shift) moves as many
+            // sets as the items allow.
+            if let Some(id) = recipe_of(book_id) {
+                host.transfer_recipe_id(&id, all);
             }
             Ok(())
         }
@@ -584,7 +567,7 @@ fn panel_stacks(stacks: Vec<Stack>) -> Vec<mod_api::Stack> {
             Some(mod_api::Stack {
                 item: item_key(&s.item)?,
                 count: s.count,
-                components: String::new(),
+                components: s.components,
             })
         })
         .collect();
@@ -600,16 +583,56 @@ fn panel_stacks(stacks: Vec<Stack>) -> Vec<mod_api::Stack> {
     out
 }
 
-/// A viewer stack as the game's.
-fn item_stack(stack: &Stack) -> Option<ItemStack> {
-    ItemStack::new(item_key(&stack.item)?, stack.count.clamp(1, 99))
+/// A viewer stack as the game's, its components (a potion's contents) read
+/// as a saved item's.
+fn item_stack(host: &dyn ClientHost, stack: &Stack) -> Option<ItemStack> {
+    let count = stack.count.clamp(1, 99);
+    if stack.components.is_empty() {
+        return ItemStack::new(item_key(&stack.item)?, count);
+    }
+    host.item_from_snbt(&saved_item(stack, count))
+}
+
+/// The SNBT of a saved item (`{id:..,count:..,components:{..}}`) from a
+/// viewer stack, whose components are an item argument's
+/// (`[minecraft:potion_contents={potion:"minecraft:water"}]`).
+fn saved_item(stack: &Stack, count: u32) -> String {
+    let inner = stack.components.trim();
+    let inner = (inner.strip_prefix('[').and_then(|s| s.strip_suffix(']'))).unwrap_or(inner);
+    let mut fields = Vec::new();
+    let (mut depth, mut quote, mut start) = (0i32, None::<char>, 0usize);
+    let mut escaped = false;
+    for (i, c) in inner.char_indices().chain([(inner.len(), ',')]) {
+        match (quote, c) {
+            (Some(_), _) if escaped => escaped = false,
+            (Some(_), '\\') => escaped = true,
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), _) => {}
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '{' | '[') => depth += 1,
+            (None, '}' | ']') => depth -= 1,
+            (None, ',') if depth == 0 => {
+                let part = inner[start..i].trim();
+                if let Some((key, value)) = part.split_once('=') {
+                    fields.push(format!("\"{}\":{}", key.trim(), value.trim()));
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    format!(
+        "{{id:\"{}\",count:{count},components:{{{}}}}}",
+        stack.item,
+        fields.join(",")
+    )
 }
 
 fn convert_event(host: &dyn ClientHost, event: &PanelEvent) -> Option<Event> {
     let stack_of = |s: &mod_api::Stack| Stack {
         item: s.item.id(host),
         count: s.count,
-        components: String::new(),
+        components: s.components.clone(),
     };
     Some(match event {
         PanelEvent::Search(text) => Event::Search(text.clone()),
@@ -698,7 +721,8 @@ pub fn command(host: &mut dyn ClientHost, command: &str) -> bool {
         return false;
     }
     if args.trim() == "debug" {
-        // The "+"'s wiring: the shown recipes' book ids and the server's last check.
+        // The "+"'s wiring: the recipe book's ids for a few recipes, the shown
+        // recipes' "+" ids and the recipes they name, and the server's last check.
         let probe: Vec<String> = [
             "minecraft:stick",
             "minecraft:stick_from_bamboo_item",
@@ -709,8 +733,9 @@ pub fn command(host: &mut dyn ClientHost, command: &str) -> bool {
         .collect();
         say(host, &format!("JEI debug: now {}", probe.join(" ")));
         let text = with(|s| {
-            let books: Vec<Option<i32>> = (0..8)
-                .map(|v| s.viewer().and_then(|viewer| viewer.shown_book(v)))
+            let books: Vec<(i32, Option<&String>)> = (0..8)
+                .filter_map(|v| s.viewer().and_then(|viewer| viewer.shown_book(v)))
+                .map(|b| (b, s.books.get(&b)))
                 .collect();
             format!("JEI debug: books {books:?}, check {:?}", s.answer)
         });
@@ -760,9 +785,9 @@ pub fn tooltip(host: &dyn ClientHost, stack: &ItemStack, lines: &mut Vec<(Text, 
     load(host);
     let item = stack.item().id(host);
     let (config, counts, marked) = with(|s| {
-        let counts = s
-            .viewer()
-            .map_or(Counts::default(), |viewer| viewer.counts(&item, ""));
+        let counts = s.viewer().map_or(Counts::default(), |viewer| {
+            viewer.counts(&item, &catalog::stack_components(stack))
+        });
         let marked = s.bookmarks.position(&Stack::item(&item)).is_some();
         (s.config, counts, marked)
     });
@@ -858,7 +883,7 @@ impl Paint<'_> {
     }
 
     fn stack(&mut self, stack: &Stack, r: [f32; 4]) {
-        if let Some(item) = item_stack(stack) {
+        if let Some(item) = item_stack(self.host, stack) {
             let count = (stack.count > 1).then(|| stack.count.to_string());
             self.d
                 .gui_draw_item_with(&item, [r[0] + 1.0, r[1] + 1.0], count.as_deref());
@@ -1193,7 +1218,7 @@ fn draw_bookmarks(p: &mut Paint<'_>, mouse: [f32; 2], window_left: f32) {
             .take(area.per_page())
         {
             let rect = area.slot(n - first);
-            if let Some(item) = item_stack(stack) {
+            if let Some(item) = item_stack(p.host, stack) {
                 p.d.item_stack(&item, [rect[0] + 1.0, rect[1] + 1.0], 16.0);
             }
             if hovered == Some(n) || drag.is_some_and(|drag| drag.from == n) {

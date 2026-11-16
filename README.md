@@ -32,8 +32,8 @@ See [`docs/jei-parity.md`](docs/jei-parity.md) for the feature-by-feature state
 against JEI.
 
 Not there yet: click on a container slot (only R/U), the creative inventory
-panel, the non-recipe categories (anvil, grindstone, compost, fuel), shift on
-"+", recipe transfer into furnaces, and the `$tooltip` / `%creative tab`
+panel, the non-recipe categories (anvil, grindstone, compost, fuel), recipe
+transfer into furnaces, and the `$tooltip` / `%creative tab`
 searches. Some of those need new Sunrise hooks; [`docs/roadmap.md`](docs/roadmap.md)
 lists them.
 

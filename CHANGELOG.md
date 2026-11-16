@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased: red for every recipe, Shift on "+", brewing and potions
+
+- **The red "Missing Items" works for every recipe**, in the player's recipe book or not. Sunrise's
+  `transfer_recipe_check` took a recipe book id, and the client knows only the ids of the recipes its book
+  holds, so a recipe the player hadn't learned got no check. It now takes the recipe's id (sunrise#1515, J5Casey/sunrise
+  `braid/sun-base` d5ed781354), as `transfer_recipe_id` does. The "+" and its check no longer
+  use book ids at all: each crafting recipe has an id of the catalog's that names the recipe.
+- **At a crafting table** the "+" and the red work too: on a server, a solo world included, Sunrise left the
+  table's own menu out of the crafting book's screens (sunrise#1525, in the same base), so the "+" there did
+  nothing and the check never answered.
+- **Shift on "+"** moves as many sets as the items allow again, for every recipe: the "+" always goes by
+  `transfer_recipe_id(id, all)`. A recipe in the book went by `transfer_recipe(book_id)`, which moves one set.
+- **Brewing** is back: 26.3 brews from `minecraft:brewing` recipe files, which `recipes_of_type` lists with
+  their JSON. The viewer reads the bottle (`input`, one stack for each potion its `potion_contents` allows),
+  the reagent and the bottle it makes, with its components.
+- **Potions in the item list** are back with them: the brewing tables name the potions, splash and lingering
+  potions by their contents, and the list, the recipe screen and bookmarks keep a stack's components (the
+  panel's `components` in an item argument's syntax, drawn through `item_from_snbt`). Every potion the tables name
+  is listed (up to 64 variants an item, was 8), and a potion's tooltip counts its own recipes and uses.
+
 ## Unreleased: Sunrise's recipe types
 
 - **Crafting recipes were missing on Sunrise**, and with them the "+": Sunrise's `recipes_of_type` and
