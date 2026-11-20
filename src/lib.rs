@@ -46,7 +46,7 @@ fn toggle(key: &str, default: bool) -> SettingSpec {
 
 #[mod_api::sunrise_mod]
 impl Hooks for Jei {
-    fn register(&self, r: &mut dyn Registrar, _cx: &RegistrationContext) {
+    fn register(&self, r: &mut dyn Registrar, cx: &RegistrationContext) {
         let settings = [
             toggle("give", false),
             SettingSpec::choice(
@@ -60,7 +60,7 @@ impl Hooks for Jei {
         ];
         for setting in settings {
             if let Err(e) = r.register_setting(setting) {
-                r.registration_refusal(format!("JEI's setting: {e:?}"));
+                cx.refuse(&format!("JEI's setting: {e:?}"));
             }
         }
         for [id, _, key] in jei::KEYS {

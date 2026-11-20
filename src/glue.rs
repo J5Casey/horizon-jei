@@ -836,7 +836,7 @@ const SHADE: [u32; 2] = [0xC0_10_10_10, 0xD0_10_10_10];
 
 /// JEI's GUI sprites (1.12's, MIT), from `assets/jei/textures/gui/sprites/`;
 /// when a sprite is missing the screen draws the same shapes with fills.
-const SPRITES: &str = "jei:gui/sprites/";
+const SPRITES: &str = "jei:";
 
 /// The host and one hook's drawing context.
 struct Paint<'a> {
@@ -1699,14 +1699,14 @@ fn draw_background(p: &mut Paint<'_>, overlay: &Overlay, view: &View, placed: &g
                 // over 10, as JEI animates them.
                 let burnt = (cycle(15_000) * 14.0).floor();
                 p.sprite(
-                    "gui/sprites/container/furnace/lit_progress",
+                    "container/furnace/lit_progress",
                     [0.0, burnt, 14.0, 14.0 - burnt],
                     [x + 1.0, y + 20.0 + burnt, 14.0, 14.0 - burnt],
                 );
                 let done = (cycle(10_000) * 24.0).floor();
                 if done > 0.0 {
                     p.sprite(
-                        "gui/sprites/container/furnace/burn_progress",
+                        "container/furnace/burn_progress",
                         [0.0, 0.0, done, 16.0],
                         [x + 24.0, y + 18.0, done, 16.0],
                     );
